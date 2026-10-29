@@ -35,6 +35,16 @@ cp .env.example .env.local   # ANTHROPIC_API_KEY 입력
 npm run dev
 ```
 
+키 없이 화면만 보려면 `.env.local`에 `MOCK_LLM=1`을 넣고 실행하세요.
+
+## 테스트
+
+```bash
+npm run build
+npm run test:remix   # 가짜 Claude 서버로 /api/remix 응답 처리(정상·거절·잘림·429·401) 확인
+npm run test:e2e     # 데모 모드로 화면 전체 흐름(업로드→각색→수정→zip 다운로드) 확인, Playwright 필요
+```
+
 ## Vercel 배포
 
 1. 이 저장소를 Vercel에 Import
@@ -46,6 +56,7 @@ npm run dev
 | `ANTHROPIC_API_KEY` | ✅ | Claude API 키 |
 | `LLM_MODEL` | | 기본 `claude-opus-5-5`. 비용을 줄이려면 `claude-sonnet-5-5` 등으로 변경 |
 | `IG_DOC_ID` | | 인스타 GraphQL doc_id. 인스타 변경으로 자동 추출이 깨지면 교체 |
+| `MOCK_LLM` | | `1`이면 데모 모드: AI 키 없이 예시 문장으로 화면 흐름 확인. **실서비스에선 비워 두기** |
 
 `/api/remix` 는 이미지 여러 장을 처리해 30초~1분 걸릴 수 있어 `maxDuration = 120` 으로 두었습니다
 (요금제별 함수 최대 실행 시간을 확인하세요).

@@ -9,6 +9,9 @@ export const DISCLOSURE =
 
 const MAX_IMAGES = 10;
 
+/** 사용자에게 그대로 보여줄 수 있는 한글 오류 */
+export class RemixError extends Error {}
+
 const ResultSchema = z.object({
   slides: z.array(
     z.object({
@@ -49,7 +52,7 @@ async function toImageBlocks(req: RemixRequest): Promise<ImageBlock[]> {
   if (req.imageDataUrls?.length) {
     return req.imageDataUrls.slice(0, MAX_IMAGES).map((d) => {
       const m = d.match(/^data:(image\/[a-z+]+);base64,(.+)$/);
-      if (!m) throw new Error("이미지 형식이 올바르지 않아요.");
+      if (!m) throw new RemixError("이미지 형식이 올바르지 않아요.");
       return {
         type: "image",
         source: { type: "base64", media_type: asMediaType(m[1]), data: m[2] },
@@ -74,13 +77,30 @@ async function toImageBlocks(req: RemixRequest): Promise<ImageBlock[]> {
   return [];
 }
 
+export const isMockMode = () => process.env.MOCK_LLM === "1";
+
+/** 데모 모드(MOCK_LLM=1): AI 키 없이 화면 흐름을 확인하기 위한 가짜 각색 결과 */
+function mockRemix(req: RemixRequest): RemixResult {
+  const textBlocks = (req.slideText ?? "").split(/\n\s*\n|^---$/m).map((t) => t.trim()).filter(Boolean);
+  const n = Math.min(MAX_IMAGES, Math.max(req.imageDataUrls?.length ?? 0, req.imageUrls?.length ?? 0, textBlocks.length, 1));
+  return {
+    slides: Array.from({ length: n }, (_, i) => ({
+      original: textBlocks[i] ?? "",
+      title: i === 0 ? "[데모] 이거 하나면\n고민 끝이에요" : i === n - 1 ? "[데모] 잊기 전에 저장!" : `[데모] ${i + 1}번째 포인트`,
+      body: i === n - 1 ? "자세한 정보는 프로필 링크에서 확인해 보세요." : "데모 모드라 AI 대신 예시 문장이 들어갔어요. 직접 고쳐 보세요.",
+    })),
+    caption: `[데모] 오늘의 추천템을 소개할게요!\n\n#데모 #추천템\n\n${DISCLOSURE}`,
+  };
+}
+
 export async function remix(req: RemixRequest): Promise<RemixResult> {
-  const images = await toImageBlocks(req);
   const slideText = req.slideText?.trim() ?? "";
   const caption = req.caption?.trim() ?? "";
-  if (!images.length && !slideText) {
-    throw new Error("각색할 슬라이드 이미지나 원문 글이 필요해요.");
+  if (!req.imageUrls?.length && !req.imageDataUrls?.length && !slideText) {
+    throw new RemixError("각색할 슬라이드 이미지나 원문 글이 필요해요.");
   }
+  if (isMockMode()) return mockRemix(req);
+  const images = await toImageBlocks(req);
 
   const content: Anthropic.ContentBlockParam[] = [];
   images.forEach((img, i) => {
@@ -94,20 +114,27 @@ export async function remix(req: RemixRequest): Promise<RemixResult> {
   content.push({ type: "text", text: parts.filter(Boolean).join("\n\n") });
 
   const client = new Anthropic();
-  const response = await client.messages.parse({
-    model: process.env.LLM_MODEL || "claude-opus-5-5",
-    max_tokens: 16000,
-    system: SYSTEM,
-    output_config: { effort: "medium", format: zodOutputFormat(ResultSchema) },
-    messages: [{ role: "user", content }],
-  });
+  const response = await client.messages
+    .parse({
+      model: process.env.LLM_MODEL || "claude-opus-5-5",
+      max_tokens: 16000,
+      system: SYSTEM,
+      output_config: { effort: "medium", format: zodOutputFormat(ResultSchema) },
+      messages: [{ role: "user", content }],
+    })
+    .catch((e) => {
+      if (e instanceof Anthropic.APIError) throw e;
+      // 응답이 잘렸거나(max_tokens) JSON이 깨진 경우
+      console.error("[remix] 응답 해석 실패", e);
+      throw new RemixError("각색 결과를 만들지 못했어요. 다시 한 번 눌러 주세요.");
+    });
 
   if (response.stop_reason === "refusal") {
-    throw new Error("이 내용은 AI가 각색을 거절했어요. 다른 게시물로 시도해 주세요.");
+    throw new RemixError("이 내용은 AI가 각색을 거절했어요. 다른 게시물로 시도해 주세요.");
   }
   const out = response.parsed_output;
   if (!out || !out.slides.length) {
-    throw new Error("각색 결과를 만들지 못했어요. 다시 한 번 눌러 주세요.");
+    throw new RemixError("각색 결과를 만들지 못했어요. 다시 한 번 눌러 주세요.");
   }
   return {
     slides: out.slides,

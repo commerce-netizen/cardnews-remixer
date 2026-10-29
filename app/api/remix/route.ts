@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
-import { remix } from "@/lib/remix";
+import { ExtractError } from "@/lib/instagram";
+import { isMockMode, remix, RemixError } from "@/lib/remix";
 import type { RemixRequest } from "@/lib/types";
 
 export const runtime = "nodejs";
@@ -8,7 +9,7 @@ export const runtime = "nodejs";
 export const maxDuration = 120;
 
 export async function POST(req: Request) {
-  if (!process.env.ANTHROPIC_API_KEY) {
+  if (!process.env.ANTHROPIC_API_KEY && !isMockMode()) {
     return NextResponse.json(
       { error: "AI 키가 설정되지 않았어요. 관리자에게 ANTHROPIC_API_KEY 설정을 요청해 주세요." },
       { status: 500 },
@@ -21,8 +22,10 @@ export async function POST(req: Request) {
     return NextResponse.json(await remix(body));
   } catch (e) {
     console.error("[remix]", e);
-    let message = e instanceof Error ? e.message : "각색 중 문제가 생겼어요.";
-    if (e instanceof Anthropic.RateLimitError) {
+    let message = "각색 중 문제가 생겼어요. 잠시 뒤 다시 눌러 주세요.";
+    if (e instanceof RemixError || e instanceof ExtractError) {
+      message = e.message;
+    } else if (e instanceof Anthropic.RateLimitError) {
       message = "지금 사용하는 사람이 많아요. 1분 뒤에 다시 눌러 주세요.";
     } else if (e instanceof Anthropic.AuthenticationError) {
       message = "AI 키가 올바르지 않아요. 관리자에게 알려 주세요.";
