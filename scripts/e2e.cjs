@@ -76,18 +76,28 @@ const BASE = `http://127.0.0.1:${PORT}`;
     );
     console.log("✓ 2번 장 사진 교체");
 
-    // 2단계 AI 사진 만들기 (NEXT_PUBLIC_ENABLE_IMAGE_GEN=1 로 빌드했을 때만 버튼이 켜짐)
-    const genBtn = page.locator("button:has-text('AI 새 사진 만들기')").first();
-    if (await genBtn.count()) {
-      await genBtn.click();
-      await page.waitForFunction(() =>
-        document.querySelector(".preview-frame img")?.getAttribute("src")?.startsWith("data:image/svg+xml"),
-      );
-      console.log("✓ AI 새 사진 만들기(데모)가 1번째 장에 반영");
-    } else {
-      assert.ok(await page.isVisible("text=AI 새 사진 (준비 중)"));
-      console.log("✓ AI 새 사진 버튼은 '준비 중'으로 꺼져 있음 (기능 스위치 꺼짐)");
-    }
+    // AI 새 사진 (데모 모드: 실제 호출 대신 자리표시 사진) — 2번 장
+    const card2 = page.locator(".card", { hasText: "2번 장" });
+    const srcOf = () => page.evaluate(() => document.querySelectorAll(".preview-frame")[1].querySelector("img")?.getAttribute("src"));
+    const original2 = await srcOf();
+    await card2.locator("button:has-text('AI 새 사진')").click();
+    await card2.locator(".preview-overlay").waitFor();
+    assert.ok(await page.locator("button:has-text('AI 새 사진')").first().isDisabled(), "생성 중엔 다른 장 버튼도 잠김");
+    await card2.locator(".preview-overlay").waitFor({ state: "detached", timeout: 30_000 });
+    const generated = await srcOf();
+    assert.ok(generated.startsWith("data:image/jpeg") && generated !== original2);
+    const size = await page.evaluate(() => {
+      const img = document.querySelectorAll(".preview-frame")[1].querySelector("img");
+      return [img.naturalWidth, img.naturalHeight];
+    });
+    assert.deepEqual(size, [1080, 1350]);
+    assert.ok(await page.locator(".preview-frame >> nth=1").getByText("직접 고친 본문").isVisible(), "글은 그대로");
+    console.log("✓ AI 새 사진(데모): 로딩 표시 → 2번 장 배경이 1080×1350 새 사진으로 교체");
+    await card2.locator("button:has-text('이전 사진으로')").click();
+    assert.equal(await srcOf(), original2);
+    await card2.locator("button:has-text('AI 새 사진')").click();
+    await card2.locator(".preview-overlay").waitFor({ state: "detached", timeout: 30_000 });
+    console.log("✓ 이전 사진으로 되돌리기 / 다시 만들기");
 
     const download = page.waitForEvent("download");
     await page.click("text=승인하고 내려받기");

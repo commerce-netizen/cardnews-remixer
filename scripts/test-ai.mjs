@@ -47,7 +47,8 @@ const scenarios = {
   quota: () => err(429, "insufficient_quota", "insufficient_quota", "You exceeded your current quota"),
   badkey: () => err(401, "invalid_request_error", "invalid_api_key", "Incorrect API key provided"),
   nomodel: () => err(404, "invalid_request_error", "model_not_found", "The model does not exist"),
-  image: () => [200, { created: 1761800000, data: [{ b64_json: Buffer.from("fake-jpeg").toString("base64") }], output_format: "jpeg", quality: "low", size: "1024x1536" }],
+  image: () => [200, { created: 1761800000, data: [{ b64_json: Buffer.from("fake-jpeg").toString("base64") }], output_format: "jpeg", quality: "low", size: "1088x1360" }],
+  blocked: () => err(400, "image_generation_user_error", "moderation_blocked", "Your request was rejected by the safety system."),
 };
 
 const requests = [];
@@ -55,8 +56,11 @@ const fake = http.createServer((req, res) => {
   let body = "";
   req.on("data", (c) => (body += c));
   req.on("end", () => {
-    requests.push({ path: req.url, body: JSON.parse(body || "{}") });
-    const name = req.url.endsWith("/images/generations")
+    // 이미지 편집(/images/edits)은 multipart 본문이라 문자열 그대로 보관
+    let parsed;
+    try { parsed = JSON.parse(body || "{}"); } catch { parsed = body; }
+    requests.push({ path: req.url, body: parsed, contentType: req.headers["content-type"] ?? "" });
+    const name = req.url.includes("/images/")
       ? (body.match(/CASE:(\w+)/)?.[1] ?? "image")
       : (body.match(/CASE:(\w+)/)?.[1] ?? "ok");
     const [status, json] = scenarios[name]();
@@ -71,7 +75,6 @@ const app = spawn("npx", ["next", "start", "-p", String(APP_PORT)], {
     ...process.env,
     OPENAI_API_KEY: "sk-test",
     OPENAI_BASE_URL: `http://127.0.0.1:${FAKE_PORT}/v1`,
-    NEXT_PUBLIC_ENABLE_IMAGE_GEN: "1",
     MOCK_LLM: "",
   },
   stdio: "ignore",
@@ -98,6 +101,8 @@ try {
   }
 
   const tinyJpeg = "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2w==";
+  // 가짜 서버가 시나리오를 고를 수 있도록 사진 바이트 안에 CASE 표시를 넣은 테스트용 사진
+  const photo = (c) => `data:image/jpeg;base64,${Buffer.from(`\xff\xd8CASE:${c}`).toString("base64")}`;
   const cases = [
     ["각색 정상 → 슬라이드·캡션 + 고지 문구", () => remix("CASE:ok"), (r) => {
       assert.equal(r.status, 200);
@@ -127,18 +132,38 @@ try {
     ["401 잘못된 키", () => remix("CASE:badkey"), (r) => { assert.equal(r.status, 502); assert.match(r.json.error, /키가 올바르지/); }],
     ["404 모델 없음(지원 종료 등)", () => remix("CASE:nomodel"), (r) => { assert.equal(r.status, 502); assert.match(r.json.error, /모델/); }],
     ["입력 없음", () => remix(""), (r) => { assert.equal(r.status, 502); assert.match(r.json.error, /필요해요/); }],
-    ["AI 사진 만들기 정상", () => post("/api/image-gen", { title: "휴대용 선풍기", body: "" }), (r) => {
+    ["AI 새 사진: 원본 사진 편집 요청", () => post("/api/image-gen", { image: photo("image"), title: "제목" }), (r) => {
       assert.equal(r.status, 200);
       assert.match(r.json.image, /^data:image\/jpeg;base64,/);
+      const { path, body, contentType } = last();
+      assert.equal(path, "/v1/images/edits");
+      assert.match(contentType, /^multipart\/form-data/);
+      const field = (name) => body.match(new RegExp(`name="${name}"\\r\\n\\r\\n([\\s\\S]*?)\\r\\n--`))?.[1];
+      assert.equal(field("model"), "gpt-image-2.5-sunburst");
+      assert.equal(field("size"), "1088x1360"); // 정확히 4:5
+      assert.equal(field("quality"), "low");
+      assert.equal(field("n"), "1");
+      assert.match(body, /name="image"; filename="slide\.jpeg"/);
+      assert.ok(body.includes("CASE:image"), "원본 사진 바이트가 그대로 전송돼야 함");
+      const prompt = field("prompt");
+      assert.match(prompt, /same food/i);
+      assert.match(prompt, /composition, arrangement of the food, camera angle and plating/);
+      assert.match(prompt, /REMOVE ALL TEXT/);
+      assert.match(prompt, /\[광고\]/);
+      assert.match(prompt, /워터마크·\[광고\] 라벨을 완전히 제거하고, 글자가 하나도 없는 깨끗한 음식 사진/);
+    }],
+    ["AI 새 사진: 사진 없는 장은 글로 생성", () => post("/api/image-gen", { title: "휴대용 선풍기" }), (r) => {
+      assert.equal(r.status, 200);
       const { path, body } = last();
       assert.equal(path, "/v1/images/generations");
-      assert.equal(body.model, "gpt-image-1-mini");
-      assert.equal(body.quality, "low");
-      assert.equal(body.size, "1024x1536");
-      assert.equal(body.n, 1);
+      assert.equal(body.model, "gpt-image-2.5-sunburst");
+      assert.equal(body.size, "1088x1360");
+      assert.match(body.prompt, /REMOVE ALL TEXT/);
     }],
-    ["AI 사진 만들기 한도 소진", () => post("/api/image-gen", { title: "CASE:quota" }), (r) => { assert.equal(r.status, 502); assert.match(r.json.error, /사용 한도/); }],
-    ["AI 사진 만들기 글 없음", () => post("/api/image-gen", {}), (r) => { assert.equal(r.status, 502); assert.match(r.json.error, /제목이나 설명/); }],
+    ["AI 새 사진: 한도 소진", () => post("/api/image-gen", { image: photo("quota") }), (r) => { assert.equal(r.status, 502); assert.match(r.json.error, /사용 한도/); }],
+    ["AI 새 사진: 안전 기준 차단", () => post("/api/image-gen", { image: photo("blocked") }), (r) => { assert.equal(r.status, 502); assert.match(r.json.error, /안전 기준/); }],
+    ["AI 새 사진: 잘못된 사진 형식", () => post("/api/image-gen", { image: "data:text/plain;base64,aGk=" }), (r) => { assert.equal(r.status, 502); assert.match(r.json.error, /사진 형식/); }],
+    ["AI 새 사진: 사진도 글도 없음", () => post("/api/image-gen", {}), (r) => { assert.equal(r.status, 502); assert.match(r.json.error, /사진을 넣거나 글을/); }],
   ];
 
   let failed = 0;
