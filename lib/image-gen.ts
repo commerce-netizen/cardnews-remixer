@@ -8,12 +8,14 @@ import { IMAGE_MODEL, isMockMode, openai, TEXT_MODEL } from "./openai";
 export const isImageGenEnabled = () => process.env.NEXT_PUBLIC_ENABLE_IMAGE_GEN !== "0";
 
 /**
- * 만드는 방식 — 목표: '원본처럼 사실적이지만 구도·배경·배치만 바뀐, 글자 없는 사진'
- *   edit (기본):  원본 사진을 이미지 편집 모델에 넣어 구도·배경·배치만 바꾼다. 원본의 실제 질감·색감·분위기를 그대로 살린다.
- *   describe:     원본을 비전으로 분석 → 같은 요리를 새로 생성. 변화는 크지만 원본 질감을 직접 보지 못해 덜 사실적일 수 있다.
- *                 분석이 실패하면 edit 로 대체한다.
+ * 만드는 방식 — 목표: '사실적이면서도 구도·배치가 한눈에 다른, 글자 없는 사진'
+ *   describe (기본): 원본을 비전으로 분석(요리·재료·사진 느낌) → 같은 요리를 새로 생성.
+ *                    원본 사진을 이미지 모델에 넣지 않으므로 구도·재료 배치가 실제로 달라진다.
+ *                    사실감은 REALISM_RULE + 분석이 뽑아낸 photo_look_en 으로 유지한다.
+ *   edit:            원본 사진을 편집 모델에 넣는다. 질감은 가장 비슷하지만 **입력 이미지 구조에 강하게
+ *                    고정돼 구도·재료 배치가 거의 그대로 남는다**(실측 확인). 분석 실패 시 대체용으로도 쓴다.
  */
-const MODE: "describe" | "edit" = process.env.OPENAI_IMAGE_MODE === "describe" ? "describe" : "edit";
+const MODE: "describe" | "edit" = process.env.OPENAI_IMAGE_MODE === "edit" ? "edit" : "describe";
 
 type Quality = "low" | "medium" | "high";
 // 저비용 기본값 low

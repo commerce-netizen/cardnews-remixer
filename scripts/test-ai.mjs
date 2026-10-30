@@ -97,7 +97,7 @@ const fake = http.createServer((req, res) => {
 await new Promise((r) => fake.listen(FAKE_PORT, r));
 
 // 기본 설정 앱 + 'AI 새 사진' describe 방식 앱 두 개를 띄운다
-const DESCRIBE_PORT = APP_PORT + 1;
+const EDIT_PORT = APP_PORT + 1;
 const startApp = (port, env = {}) =>
   spawn("npx", ["next", "start", "-p", String(port)], {
     env: {
@@ -111,7 +111,7 @@ const startApp = (port, env = {}) =>
     stdio: "ignore",
     detached: true,
   });
-const apps = [startApp(APP_PORT), startApp(DESCRIBE_PORT, { OPENAI_IMAGE_MODE: "describe" })];
+const apps = [startApp(APP_PORT), startApp(EDIT_PORT, { OPENAI_IMAGE_MODE: "edit" })];
 const stop = () => { for (const a of apps) { try { process.kill(-a.pid); } catch {} } fake.close(); };
 
 async function post(path, payload, port = APP_PORT) {
@@ -126,7 +126,7 @@ const remix = (slideText, extra = {}) => post("/api/remix", { slideText, caption
 const last = () => requests.at(-1);
 
 try {
-  for (const port of [APP_PORT, DESCRIBE_PORT]) {
+  for (const port of [APP_PORT, EDIT_PORT]) {
     for (let i = 0; ; i++) {
       try { await fetch(`http://127.0.0.1:${port}/`); break; } catch {}
       if (i > 40) throw new Error("앱 서버가 뜨지 않음");
@@ -204,12 +204,12 @@ try {
     ["401 잘못된 키", () => remix("CASE:badkey"), (r) => { assert.equal(r.status, 502); assert.match(r.json.error, /키가 올바르지/); }],
     ["404 모델 없음(지원 종료 등)", () => remix("CASE:nomodel"), (r) => { assert.equal(r.status, 502); assert.match(r.json.error, /모델/); }],
     ["입력 없음", () => remix(""), (r) => { assert.equal(r.status, 502); assert.match(r.json.error, /필요해요/); }],
-    ["AI 새 사진(기본=편집): 같은 요리·사실적 질감 유지 + 구도는 한눈에 다르게", () => post("/api/image-gen", { image: photo("image"), title: "제목" }), (r) => {
+    ["AI 새 사진(편집 방식 선택 시): 원본 사진을 그대로 편집", () => post("/api/image-gen", { image: photo("image"), title: "제목" }, EDIT_PORT), (r) => {
       assert.equal(r.status, 200);
       assert.match(r.json.image, /^data:image\/jpeg;base64,/);
       const { path, body, contentType } = last();
       assert.equal(path, "/v1/images/edits");
-      assert.notEqual(requests.at(-2)?.body?.text?.format?.name, "food_photo_analysis", "기본 방식은 분석 단계 없이 바로 편집");
+      assert.notEqual(requests.at(-2)?.body?.text?.format?.name, "food_photo_analysis", "편집 방식은 분석 단계 없이 바로 편집");
       assert.match(contentType, /^multipart\/form-data/);
       const field = (name) => body.match(new RegExp(`name="${name}"\\r\\n\\r\\n([\\s\\S]*?)\\r\\n--`))?.[1];
       assert.equal(field("model"), "gpt-image-2.5-sunburst");
@@ -224,7 +224,7 @@ try {
       checkAllAxes(prompt);
       assert.match(prompt, /앵글·거리·화면 속 위치·재료들의 배치·배경은 한눈에 다르게 바꿔라/);
     }],
-    ["AI 새 사진(describe 방식 선택 시): 분석 → 사실적으로 다시 촬영", () => post("/api/image-gen", { image: photo("image") }, DESCRIBE_PORT), (r) => {
+    ["AI 새 사진(기본): 분석 → 구도·배치가 다른 사진을 새로 생성", () => post("/api/image-gen", { image: photo("image") }), (r) => {
       assert.equal(r.status, 200);
       const [analyzeReq, genReq] = requests.slice(-2);
       assert.equal(analyzeReq.body.text.format.name, "food_photo_analysis");
@@ -239,7 +239,7 @@ try {
       checkAllAxes(prompt);
       assert.ok(!/straight top-down \(90°\)/.test(prompt), "원본과 같은 앵글을 고르면 안 됨");
     }],
-    ["AI 새 사진(describe): 분석 실패 시 편집으로 대체", () => post("/api/image-gen", { image: photo("analysisbroken") }, DESCRIBE_PORT), (r) => {
+    ["AI 새 사진: 분석 실패 시 편집으로 대체", () => post("/api/image-gen", { image: photo("analysisbroken") }), (r) => {
       assert.equal(r.status, 200);
       assert.equal(last().path, "/v1/images/edits");
       assert.ok(last().body.includes("CASE:analysisbroken"));
@@ -251,8 +251,8 @@ try {
       assert.equal(body.size, "1088x1360");
       checkRealisticPrompt(body.prompt);
     }],
-    ["AI 새 사진: 한도 소진", () => post("/api/image-gen", { image: photo("quota") }), (r) => { assert.equal(r.status, 502); assert.match(r.json.error, /사용 한도/); assert.equal(last().path, "/v1/images/edits"); }],
-    ["AI 새 사진(describe): 분석 단계 한도 소진", () => post("/api/image-gen", { image: photo("quota") }, DESCRIBE_PORT), (r) => { assert.equal(r.status, 502); assert.match(r.json.error, /사용 한도/); assert.equal(last().path, "/v1/responses"); }],
+    ["AI 새 사진(편집 방식): 한도 소진", () => post("/api/image-gen", { image: photo("quota") }, EDIT_PORT), (r) => { assert.equal(r.status, 502); assert.match(r.json.error, /사용 한도/); assert.equal(last().path, "/v1/images/edits"); }],
+    ["AI 새 사진: 분석 단계 한도 소진", () => post("/api/image-gen", { image: photo("quota") }), (r) => { assert.equal(r.status, 502); assert.match(r.json.error, /사용 한도/); assert.equal(last().path, "/v1/responses"); }],
     ["AI 새 사진: 안전 기준 차단", () => post("/api/image-gen", { image: photo("blocked") }), (r) => { assert.equal(r.status, 502); assert.match(r.json.error, /안전 기준/); }],
     ["AI 새 사진: 잘못된 사진 형식", () => post("/api/image-gen", { image: "data:text/plain;base64,aGk=" }), (r) => { assert.equal(r.status, 502); assert.match(r.json.error, /사진 형식/); }],
     ["AI 새 사진: 사진도 글도 없음", () => post("/api/image-gen", {}), (r) => { assert.equal(r.status, 502); assert.match(r.json.error, /사진을 넣거나 글을/); }],
