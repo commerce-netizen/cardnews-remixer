@@ -1,6 +1,6 @@
 "use client";
 
-import { forwardRef, useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { forwardRef, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { pretendard } from "@/lib/fonts";
 import { fontStack } from "@/lib/webfonts";
 import {
@@ -205,19 +205,34 @@ export const SlidePreview = forwardRef<HTMLDivElement, Props & { overlay?: React
   ref,
 ) {
   const box = useRef<HTMLDivElement>(null);
-  const [scale, setScale] = useState(0.4);
+  const [scale, setScale] = useState(0);
 
-  useEffect(() => {
+  // 첫 그림 전에 폭을 재야 한다. 안 그러면 한 번 크게 그려졌다가 줄어들어 깜빡인다
+  useLayoutEffect(() => {
     const el = box.current;
     if (!el) return;
-    const ro = new ResizeObserver(() => setScale(el.clientWidth / SLIDE_W));
+    const fit = () => setScale(el.clientWidth / SLIDE_W);
+    fit();
+    const ro = new ResizeObserver(fit);
     ro.observe(el);
     return () => ro.disconnect();
   }, []);
 
   return (
     <div ref={box} className="preview-frame">
-      <div style={{ transform: `scale(${scale})`, transformOrigin: "top left", width: SLIDE_W, height: SLIDE_H }}>
+      <div
+        style={{
+          // 변환 전 크기(1080×1350)가 바깥 레이아웃에 영향 주지 않게 띄워 둔다
+          position: "absolute",
+          top: 0,
+          left: 0,
+          transform: `scale(${scale})`,
+          transformOrigin: "top left",
+          width: SLIDE_W,
+          height: SLIDE_H,
+          visibility: scale ? "visible" : "hidden",
+        }}
+      >
         <SlideCanvas ref={ref} {...props} />
       </div>
       {/* 화면에만 보이는 덧씌움(로딩 표시 등) — PNG 저장에는 들어가지 않음 */}

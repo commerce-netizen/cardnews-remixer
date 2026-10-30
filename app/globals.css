@@ -203,13 +203,18 @@ select {
   padding: 4px 4px 14px;
   margin: 0 -4px;
   scrollbar-width: thin;
+  scroll-padding-left: 4px;
   -webkit-overflow-scrolling: touch;
 }
 .slide-rail > .card {
-  flex: 0 0 min(86vw, 330px);
-  scroll-snap-align: center;
+  flex: 0 0 min(88vw, 340px);
+  /* flex 아이템은 기본이 min-width:auto 라 안쪽 내용 때문에 지정한 폭보다 넓어진다 → 화면 밖으로 잘림 */
+  min-width: 0;
+  max-width: 100%;
+  scroll-snap-align: start;
   margin-bottom: 0;
 }
+.slide-rail > .card > * { min-width: 0; }
 /* PC에선 카드가 한 화면에 들어오도록 미리보기를 조금 작게 */
 @media (min-width: 980px) {
   .slide-rail .preview-frame { max-width: 250px; }
@@ -432,9 +437,15 @@ input[type="range"] { width: 100%; height: 32px; accent-color: var(--primary); }
   .tabs { margin-bottom: 24px; }
   .tab { flex: 1; text-align: center; padding: 12px 8px; }
   /* 손가락으로 누르는 화면이라 버튼은 넉넉하게 */
-  .btn { min-height: 54px; }
-  .btn-huge { min-height: 62px; font-size: 1.15rem; }
-  .row > .btn { flex: 1 1 100%; }
+  .btn { min-height: 52px; padding: 10px 14px; }
+  .btn-huge { min-height: 60px; font-size: 1.1rem; }
+  /* 버튼을 한 줄에 하나씩 쌓으면 카드가 너무 길어진다 → 둘씩 */
+  .row > .btn { flex: 1 1 calc(50% - 5px); }
+  .row > .btn-block { flex: 1 1 100%; }
+  /* 슬라이드 카드는 미리보기+글+버튼이 한 화면에 들어오게 */
+  .slide-rail > .card { padding: 16px 14px; }
+  .slide-rail .preview-frame { max-width: 240px; }
+  .slide-rail textarea { min-height: 86px; }
   .seg button { min-height: 46px; }
   .swatch { width: 42px; height: 42px; }
   .approve-bar { padding: 10px 16px calc(10px + env(safe-area-inset-bottom)); }
