@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { SlidePreview } from "./SlideCard";
 import { buildCaption } from "@/lib/caption";
+import { buildDm, type DmContent } from "@/lib/dm";
 import { FONTS, loadFonts } from "@/lib/webfonts";
 import {
   ALIGN_LABEL,
@@ -20,6 +21,7 @@ import {
   uniqueName,
   type Align,
   type CaptionStyle,
+  type DmStyle,
   type Template,
   type TextSize,
   type TextStyle,
@@ -42,6 +44,18 @@ const SAMPLE_CAPTION_BODY =
   "맛집에서 먹던 그 떡볶이, 집에서도 그대로 만들 수 있어요😳 " +
   "양념장에 비법 소스 한 스푼만 더하면 감칠맛이 확 살아나요✨ " +
   "며칠 내내 먹어도 안 질려서 하나쯤 알아두면 정말 유용해요💗";
+
+/** DM 미리보기에 쓰는 보기 레시피 (AI가 쓰는 자리) */
+const SAMPLE_DM: DmContent = {
+  title: "🌶️ 즉석 떡볶이 비법 양념장",
+  ingredients: ["🍯 물엿 5T", "🍚 설탕 2T", "🌶️ 고운 고춧가루 2T", "🥄 고추장 2T", "✨ 비밀재료 2T", "🧂 후추 약간"],
+  steps: [
+    "모든 양념 재료를 넣고 골고루 섞어주세요.",
+    "냄비에 떡과 물을 넣고 양념장을 풀어주세요.",
+    "떡이 부드러워지고 양념이 걸쭉해질 때까지 끓이면 완성!",
+  ],
+  tip: "비밀재료를 꼭 넣어야 감칠맛이 터지고 까만 양념장이 완성돼요!",
+};
 
 const TEXT_COLORS = ["#ffffff", "#1c1c1e", "#ffe14d", "#ff5a3c", "#2f6bff", "#1b7f3a"];
 const BOX_COLORS = ["#ffffff", "#000000", "#1c1c1e", "#ffe14d", "#2f6bff", "#c62828"];
@@ -132,6 +146,8 @@ export default function TemplateManager({ onClose, onPick }: Props) {
     setDraft((d) => (d ? { ...d, watermark: { ...d.watermark, ...p } } : d));
   const patchCaption = (p: Partial<CaptionStyle>) =>
     setDraft((d) => (d ? { ...d, caption: { ...d.caption, ...p } } : d));
+  const patchDm = (p: Partial<DmStyle>) =>
+    setDraft((d) => (d ? { ...d, dm: { ...d.dm, ...p } } : d));
 
   // ── 편집 화면 ───────────────────────────────────────────────
   if (draft) {
@@ -336,6 +352,41 @@ export default function TemplateManager({ onClose, onPick }: Props) {
           <div>
             <span className="field-label">이렇게 올라가요</span>
             <div className="caption-preview">{buildCaption(SAMPLE_CAPTION_BODY, draft)}</div>
+          </div>
+        </section>
+
+        <section className="card stack">
+          <h2 style={{ margin: 0 }}>자동 DM (댓글 단 사람에게 보내는 글)</h2>
+          <p className="muted small" style={{ margin: 0 }}>
+            <b>맨 윗줄</b>과 <b>맨 아랫줄(버튼 안내)</b>만 정하면 돼요.
+            가운데 레시피는 AI가 사진을 보고 써 주고, <b>비밀재료는 이름을 밝히지 않아요.</b>
+          </p>
+
+          <div>
+            <label className="field-label" htmlFor="dm-intro">맨 윗줄</label>
+            <input
+              id="dm-intro"
+              type="text"
+              value={draft.dm.intro}
+              onChange={(e) => patchDm({ intro: e.target.value })}
+              placeholder="예) 비밀재료는 딱 1개야. 댓글로 요청하신 레시피 드립니다!"
+              autoComplete="off"
+            />
+          </div>
+          <div>
+            <label className="field-label" htmlFor="dm-cta">맨 아랫줄 (버튼 안내)</label>
+            <textarea
+              id="dm-cta"
+              rows={3}
+              value={draft.dm.bottomCta}
+              onChange={(e) => patchDm({ bottomCta: e.target.value })}
+              placeholder={"예) 👇비밀 재료는 하단 버튼 클릭 후\n<1 or 재료> 검색해주세요!"}
+            />
+          </div>
+
+          <div>
+            <span className="field-label">이렇게 보내져요</span>
+            <div className="caption-preview">{buildDm(SAMPLE_DM, draft)}</div>
           </div>
         </section>
 

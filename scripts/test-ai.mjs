@@ -15,6 +15,12 @@ const good = {
     { original: "1. 휴대용 선풍기", title: "손바닥만 한 바람 공장", body: "가방에 쏙, 하루 종일 시원해요." },
   ],
   caption: "더위에 지친 분들 모여라!\n\n#여름필수템 #쿠팡추천",
+  dm: {
+    title: "🌶️ 즉석 떡볶이 비법 양념장",
+    ingredients: ["🍯 물엿 5T", "✨ 비밀재료 2T", "🧂 후추 약간"],
+    steps: ["모든 양념 재료를 섞어주세요.", "떡과 물을 넣고 끓이면 완성!"],
+    tip: "비밀재료를 꼭 넣어야 감칠맛이 터져요!",
+  },
 };
 
 function response(output, extra = {}) {
@@ -189,6 +195,11 @@ try {
       assert.ok(ins.includes("원본에 없는 재료·분량·비율·온도·시간을 지어내지 마세요"), "레시피 수치 날조 금지");
       assert.ok(ins.includes("미지근한 표현 금지"), "미지근한 표현 금지");
       assert.ok(ins.includes("어미를 겹쳐 붙여 없는 말을 만들지 마세요"), "비문 방지");
+      // 자동 DM 규칙
+      assert.ok(ins.includes("댓글 단 사람에게 보내는 자동 DM"), "DM 섹션");
+      assert.ok(ins.includes("그게 무엇인지는 절대 쓰지 마세요"), "비밀재료 정체 비공개");
+      assert.ok(ins.includes("비밀재료의 정체를 암시하지 마세요"), "암시도 금지");
+      assert.deepEqual(r.json.dm, good.dm, "DM 레시피가 그대로 전달된다");
     }],
     ["사진 글씨 읽기(vision) 요청 형식", () => remix("CASE:ok", { imageDataUrls: [tinyJpeg, tinyJpeg] }), (r) => {
       assert.equal(r.status, 200);

@@ -1,3 +1,5 @@
+import type { DmContent } from "./dm";
+
 export type Slide = {
   /** 화면에 표시할 이미지 주소 (프록시 URL 또는 data URL). 없으면 글자만 있는 슬라이드 */
   image: string | null;
@@ -28,4 +30,6 @@ export type RemixRequest = {
 export type RemixResult = {
   slides: { original: string; title: string; body: string }[];
   caption: string;
+  /** 자동 DM용 레시피 (인트로·CTA·고지는 화면에서 템플릿대로 붙인다) */
+  dm: DmContent;
 };

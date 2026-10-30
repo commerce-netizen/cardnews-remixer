@@ -1,4 +1,5 @@
 import { DEFAULT_BOTTOM_CTA, DEFAULT_TOP_CTA } from "./caption";
+import { DEFAULT_DM_CTA, DEFAULT_DM_INTRO } from "./dm";
 import { DEFAULT_FONT_ID } from "./webfonts";
 
 /**
@@ -43,6 +44,12 @@ export type CaptionStyle = {
   bottomCta: string;
 };
 
+/** 자동 DM에서 사용자가 정하는 부분 (가운데 레시피는 AI가 씀) */
+export type DmStyle = {
+  intro: string;
+  bottomCta: string;
+};
+
 export type Template = {
   id: string;
   name: string;
@@ -52,6 +59,7 @@ export type Template = {
   body: TextStyle;
   watermark: WatermarkStyle;
   caption: CaptionStyle;
+  dm: DmStyle;
 };
 
 export const DEFAULT_WATERMARK = "맛집도둑";
@@ -106,6 +114,11 @@ const DEFAULT_CAPTION: CaptionStyle = {
   bottomCta: DEFAULT_BOTTOM_CTA,
 };
 
+const DEFAULT_DM: DmStyle = {
+  intro: DEFAULT_DM_INTRO,
+  bottomCta: DEFAULT_DM_CTA,
+};
+
 export const BUILTIN_TEMPLATES: Template[] = [
   {
     id: "default",
@@ -115,6 +128,7 @@ export const BUILTIN_TEMPLATES: Template[] = [
     body: DEFAULT_BODY,
     watermark: DEFAULT_WATERMARK_STYLE,
     caption: DEFAULT_CAPTION,
+    dm: DEFAULT_DM,
   },
   {
     id: "subtitle-black",
@@ -132,6 +146,7 @@ export const BUILTIN_TEMPLATES: Template[] = [
     },
     watermark: { ...DEFAULT_WATERMARK_STYLE, fontId: "pretendard", opacity: 70 },
     caption: DEFAULT_CAPTION,
+    dm: DEFAULT_DM,
   },
   {
     id: "clean-white",
@@ -149,6 +164,7 @@ export const BUILTIN_TEMPLATES: Template[] = [
     },
     watermark: { ...DEFAULT_WATERMARK_STYLE, opacity: 65 },
     caption: DEFAULT_CAPTION,
+    dm: DEFAULT_DM,
   },
 ];
 
@@ -165,7 +181,12 @@ export function loadUserTemplates(): Template[] {
     const list = JSON.parse(raw);
     if (!Array.isArray(list)) return [];
     // 예전에 저장한 템플릿엔 caption이 없을 수 있어 기본값으로 채운다
-    return list.filter(isTemplate).map((t) => ({ ...t, builtin: false, caption: { ...DEFAULT_CAPTION, ...t.caption } }));
+    return list.filter(isTemplate).map((t) => ({
+      ...t,
+      builtin: false,
+      caption: { ...DEFAULT_CAPTION, ...t.caption },
+      dm: { ...DEFAULT_DM, ...t.dm },
+    }));
   } catch {
     return [];
   }

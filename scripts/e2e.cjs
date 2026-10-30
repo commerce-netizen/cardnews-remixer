@@ -119,6 +119,13 @@ const BASE = `http://127.0.0.1:${PORT}`;
     assert.equal(await page.inputValue("#text0"), "직접 고친\n표지 제목", "작업물 유지");
     console.log("✓ 맨 위 '← 처음으로' + 되돌릴 수 없음 확인");
 
+    // 자동 DM: 템플릿 인트로 + AI 레시피 + 버튼 안내
+    const dmBox = await page.inputValue('textarea[aria-label="자동 DM"]');
+    assert.ok(dmBox.startsWith("비밀재료는 딱 1개야."), "맨 윗줄 = 템플릿 인트로");
+    assert.ok(dmBox.trimEnd().endsWith("수수료를 제공받습니다.*"), "맨 끝 = 쿠팡 고지");
+    assert.equal((dmBox.match(/✨/g) || []).length, 1, "비밀재료는 딱 한 줄");
+    console.log("✓ 자동 DM 문구 생성 (비밀재료 1줄, 정체 비공개)");
+
     const download = page.waitForEvent("download");
     await page.click("text=승인하고 내려받기");
     const d = await download;
@@ -128,13 +135,19 @@ const BASE = `http://127.0.0.1:${PORT}`;
     const JSZip = require("jszip");
     const zip = await JSZip.loadAsync(fs.readFileSync(zipPath));
     const names = Object.keys(zip.files).sort();
-    assert.deepEqual(names, ["caption.txt", "slide_01.png", "slide_02.png", "slide_03.png"]);
+    assert.deepEqual(names, ["caption.txt", "dm.txt", "slide_01.png", "slide_02.png", "slide_03.png"]);
+    const dmTxt = await zip.file("dm.txt").async("string");
+    assert.match(dmTxt, /✨ 비밀재료/, "비밀재료 줄");
+    assert.ok(!/비밀재료는 .*입니다|비밀재료 ?= ?/.test(dmTxt), "비밀재료의 정체는 안 적힌다");
+    assert.match(dmTxt, /🧑‍🍳 만드는 법/);
+    assert.match(dmTxt, /1️⃣ .+\n\n2️⃣ /, "단계는 번호 이모지 + 빈 줄 구분");
+    assert.match(dmTxt, /쿠팡파트너스 활동의 일환/);
     const png = await zip.file("slide_01.png").async("nodebuffer");
     assert.equal(png.readUInt32BE(16), 1080);
     assert.equal(png.readUInt32BE(20), 1350);
     assert.match(await zip.file("caption.txt").async("string"), /쿠팡 파트너스/);
     await page.waitForSelector("text=완성!");
-    console.log("✓ 승인 → zip(1080×1350 PNG 3장 + 캡션) 다운로드");
+    console.log("✓ 승인 → zip(1080×1350 PNG 3장 + 캡션 + 자동 DM) 다운로드");
   } finally {
     await browser.close();
     try { process.kill(-app.pid); } catch {}

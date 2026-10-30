@@ -6,6 +6,7 @@ import Editor from "@/components/Editor";
 import { prepareImages, type PreparedImage } from "@/lib/client-images";
 import { SLIDE_H, SLIDE_W } from "@/components/SlideCard";
 import { IMAGE_GEN_ENABLED, makeAiPhoto } from "@/lib/slide-image";
+import type { DmContent } from "@/lib/dm";
 import type { ExtractResult, RemixRequest, RemixResult, Slide } from "@/lib/types";
 
 type Step = "home" | "manual" | "loading" | "edit";
@@ -43,6 +44,7 @@ export default function Home() {
   const [slides, setSlides] = useState<Slide[]>([]);
   // AI가 각색한 캡션 본문 (CTA·고지 문구는 Editor가 템플릿대로 붙인다)
   const [caption, setCaption] = useState("");
+  const [dmContent, setDmContent] = useState<DmContent | null>(null);
 
   /**
    * 글 각색과 AI 새 사진을 **동시에** 돌린다.
@@ -101,6 +103,7 @@ export default function Home() {
         }),
       );
       setCaption(r.caption);
+      setDmContent(r.dm ?? null);
       setSource(src);
       setInfo(
         failed.length
@@ -182,6 +185,7 @@ export default function Home() {
     setManualCaption("");
     setSlides([]);
     setSource(null);
+    setDmContent(null);
   };
 
   return (
@@ -294,6 +298,7 @@ export default function Home() {
         <Editor
           slides={slides}
           captionBody={caption}
+          dmContent={dmContent}
           onChangeSlides={setSlides}
           // 다시 각색해도 사용자가 바꾼 사진은 유지
           onRemixAgain={() => runRemix({ ...source, images: slides.map((s) => s.image) }, "edit", false)}

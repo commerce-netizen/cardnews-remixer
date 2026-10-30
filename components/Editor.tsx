@@ -7,6 +7,7 @@ import { resizeImage } from "@/lib/client-images";
 import { IMAGE_GEN_ENABLED, makeAiPhoto } from "@/lib/slide-image";
 import { downloadZip, renderSlides, triggerDownload } from "@/lib/export";
 import { buildCaption } from "@/lib/caption";
+import { buildDm, type DmContent } from "@/lib/dm";
 import { loadFonts } from "@/lib/webfonts";
 import {
   BUILTIN_TEMPLATES,
@@ -24,13 +25,17 @@ type Props = {
   slides: Slide[];
   /** AI가 각색한 캡션 본문 (CTA·고지 문구 없이). 템플릿 CTA를 붙여 완성한다 */
   captionBody: string;
+  /** AI가 만든 자동 DM 레시피 (인트로·CTA·고지는 템플릿대로 붙인다) */
+  dmContent: DmContent | null;
   onChangeSlides: Dispatch<SetStateAction<Slide[]>>;
   onRemixAgain: () => void;
   onRestart: () => void;
 };
 
-export default function Editor({ slides, captionBody, onChangeSlides, onRemixAgain, onRestart }: Props) {
+export default function Editor({ slides, captionBody, dmContent, onChangeSlides, onRemixAgain, onRestart }: Props) {
   const [caption, setCaption] = useState("");
+  const [dm, setDm] = useState("");
+  const [dmCopied, setDmCopied] = useState(false);
   const [watermark, setWatermark] = useState(DEFAULT_TEMPLATE.watermark.text);
   const [templates, setTemplates] = useState<Template[]>(BUILTIN_TEMPLATES);
   const [templateId, setTemplateId] = useState(DEFAULT_TEMPLATE.id);
@@ -66,6 +71,11 @@ export default function Editor({ slides, captionBody, onChangeSlides, onRemixAga
     setCaption(buildCaption(captionBody, template));
     setResults(null);
   }, [captionBody, template]);
+
+  // 자동 DM = 템플릿의 인트로 + AI 레시피 + 버튼 안내 + 고지
+  useEffect(() => {
+    setDm(buildDm(dmContent, template));
+  }, [dmContent, template]);
 
   /** 템플릿을 바꾸면 워터마크 문구도 그 템플릿에 저장된 문구로 맞춘다 */
   function applyTemplate(id: string, list: Template[] = templates) {
@@ -129,15 +139,17 @@ export default function Editor({ slides, captionBody, onChangeSlides, onRemixAga
     forgetPrev(i);
   };
 
-  const copyCaption = async () => {
+  const copyText = async (text: string, mark: (v: boolean) => void, what: string) => {
     try {
-      await navigator.clipboard.writeText(caption);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2500);
+      await navigator.clipboard.writeText(text);
+      mark(true);
+      setTimeout(() => mark(false), 2500);
     } catch {
-      setError("복사가 안 됐어요. 캡션 칸을 길게 눌러 직접 복사해 주세요.");
+      setError(`복사가 안 됐어요. ${what} 칸을 길게 눌러 직접 복사해 주세요.`);
     }
   };
+  const copyCaption = () => copyText(caption, setCopied, "캡션");
+  const copyDm = () => copyText(dm, setDmCopied, "DM");
 
   const approve = async () => {
     setError(null);
@@ -149,7 +161,7 @@ export default function Editor({ slides, captionBody, onChangeSlides, onRemixAga
       const blobs = await renderSlides(els, (d) => setBusy(`완성본 만드는 중… (${d} / ${slides.length}장)`));
       resultBlobs.current = blobs;
       setResults(blobs.map((b) => URL.createObjectURL(b)));
-      await downloadZip(blobs, caption);
+      await downloadZip(blobs, caption, dm);
     } catch (e) {
       console.error(e);
       setError("완성본을 만들다 문제가 생겼어요. 사진을 바꾸거나 다시 눌러 주세요.");
@@ -303,11 +315,25 @@ export default function Editor({ slides, captionBody, onChangeSlides, onRemixAga
         </button>
       </section>
 
+      {dm && (
+        <section className="card">
+          <h2>⑤ 자동 DM (댓글 단 사람에게 보낼 글)</h2>
+          <p className="muted small" style={{ margin: "0 0 14px" }}>
+            맨 윗줄·맨 아랫줄은 <b>템플릿</b>에서 바꿔요. <b>비밀재료가 뭔지는 일부러 안 적혀 있어요</b> —
+            그걸 알려면 링크를 눌러야 하니까요.
+          </p>
+          <textarea rows={18} value={dm} onChange={(e) => { setDm(e.target.value); setResults(null); }} aria-label="자동 DM" />
+          <button className="btn btn-secondary btn-block" style={{ marginTop: 16 }} onClick={copyDm}>
+            {dmCopied ? "✓ 복사됐어요" : "📋 DM 문구 복사하기"}
+          </button>
+        </section>
+      )}
+
       {results && (
         <section className="card" style={{ borderColor: "var(--ok)" }}>
           <h2>완성! 🎉</h2>
           <p>
-            컴퓨터에는 <b>압축 파일(zip)</b>로 저장됐어요. 휴대폰에서는 아래 사진을 <b>길게 눌러 저장</b>하거나 저장 버튼을 누르세요.
+            컴퓨터에는 <b>압축 파일(zip)</b>로 저장됐어요. 사진과 함께 <b>캡션·자동 DM 글</b>도 들어 있어요. 휴대폰에서는 아래 사진을 <b>길게 눌러 저장</b>하거나 저장 버튼을 누르세요.
           </p>
           <div className="thumbs">
             {results.map((u, i) => (

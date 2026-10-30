@@ -55,12 +55,21 @@ const BASE = `http://127.0.0.1:${PORT}`;
     // 캡션 CTA (맨 윗줄·맨 아랫줄)
     await page.fill("#cta-top", "😋 레시피 원하면 '나도'!");
     await page.fill("#cta-bottom", "💬 저장하고 따라 해 보세요 👉");
-    const ctaPreview = await page.locator(".caption-preview").innerText();
+    const ctaPreview = await page.locator(".caption-preview").first().innerText();
     assert.ok(ctaPreview.startsWith("😋 레시피 원하면 '나도'!"), "맨 윗줄 CTA");
     assert.ok(/💬 저장하고 따라 해 보세요 👉/.test(ctaPreview), "맨 아랫줄 CTA");
     assert.ok(/쿠팡 파트너스 활동의 일환/.test(ctaPreview), "쿠팡 고지는 항상 맨 끝");
     assert.ok(ctaPreview.indexOf("💬 저장하고") < ctaPreview.indexOf("쿠팡 파트너스"), "고지가 CTA 뒤");
-    console.log("✓ 표지·내지 글꼴/색/크기, 글상자, 워터마크, 캡션 CTA 설정");
+    // 자동 DM 인트로·버튼 안내
+    await page.fill("#dm-intro", "비법 알려드려요!");
+    await page.fill("#dm-cta", "👇 아래 버튼 눌러주세요");
+    const dmPreview = await page.locator(".caption-preview").last().innerText();
+    assert.ok(dmPreview.startsWith("비법 알려드려요!"), "DM 맨 윗줄");
+    assert.match(dmPreview, /✨ 비밀재료/, "비밀재료 줄은 그대로");
+    assert.match(dmPreview, /🧑‍🍳 만드는 법/);
+    assert.ok(/👇 아래 버튼 눌러주세요/.test(dmPreview), "DM 맨 아랫줄");
+    assert.ok(dmPreview.trimEnd().endsWith("수수료를 제공받습니다.*"), "DM 고지는 항상 맨 끝");
+    console.log("✓ 표지·내지 글꼴/색/크기, 글상자, 워터마크, 캡션 CTA, 자동 DM 설정");
 
     // CDN 글꼴이 실제로 내려와 미리보기에 쓰이는지
     await page.waitForFunction(() => document.fonts.check('80px "Gmarket Sans"'), null, { timeout: 30_000 });
@@ -104,6 +113,9 @@ const BASE = `http://127.0.0.1:${PORT}`;
 
     assert.equal(await page.locator("#template").inputValue(), await templateIdOf(page, "내 테스트 디자인"));
     assert.equal(await page.inputValue("#watermark"), "테스트가게", "템플릿에 저장한 워터마크 문구가 따라온다");
+    const dmBox = await page.inputValue('textarea[aria-label="자동 DM"]');
+    assert.ok(dmBox.startsWith("비법 알려드려요!"), "편집 화면 DM에 템플릿 인트로 반영");
+    assert.ok(/👇 아래 버튼 눌러주세요/.test(dmBox), "편집 화면 DM에 템플릿 버튼 안내 반영");
     const cap = await page.inputValue('textarea[aria-label="캡션"]');
     assert.ok(cap.startsWith("😋 레시피 원하면 '나도'!\n\n"), "캡션 맨 윗줄 = 템플릿 CTA");
     assert.ok(cap.trimEnd().endsWith("수수료를 제공받습니다."), "캡션 맨 끝 = 쿠팡 고지");
@@ -144,7 +156,7 @@ const BASE = `http://127.0.0.1:${PORT}`;
     await d.saveAs(zipPath);
     const JSZip = require("jszip");
     const zip = await JSZip.loadAsync(fs.readFileSync(zipPath));
-    assert.deepEqual(Object.keys(zip.files).sort(), ["caption.txt", "slide_01.png", "slide_02.png"]);
+    assert.deepEqual(Object.keys(zip.files).sort(), ["caption.txt", "dm.txt", "slide_01.png", "slide_02.png"]);
     const png = await zip.file("slide_01.png").async("nodebuffer");
     assert.equal(png.readUInt32BE(16), 1080);
     assert.equal(png.readUInt32BE(20), 1350);
