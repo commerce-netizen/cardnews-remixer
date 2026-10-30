@@ -1,41 +1,45 @@
 "use client";
 
 import { forwardRef, useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
-import { jua, pretendard } from "@/lib/fonts";
+import { pretendard } from "@/lib/fonts";
+import { fontStack } from "@/lib/webfonts";
+import {
+  DEFAULT_TEMPLATE,
+  SIZE_SCALE,
+  isLight,
+  rgba,
+  type Template,
+  type TextStyle,
+} from "@/lib/templates";
 import type { Slide } from "@/lib/types";
 
 /** 인스타그램 세로 피드 비율 4:5 */
 export const SLIDE_W = 1080;
 export const SLIDE_H = 1350;
 
-export const DEFAULT_WATERMARK = "맛집도둑";
-
 /*
- * 디자인 수치는 저장소 루트의 레퍼런스(ref-slide*.jpg, 800×1000)를 픽셀 측정해 1080×1350(×1.35)로 옮긴 값.
- *   표지 제목: Jua 84px, 줄 간격 103px, 왼쪽 77px, 마지막 줄 바닥 ≈1185px, 검은 외곽선
- *   본문 박스: x 167~909(폭 742, 가운데), y 953~1211(높이 258), 흰색 48% 반투명 + 1.5px 검은 테두리
- *   본문 글자: Jua 52px, 줄 간격 57px, 가운데 정렬, 검은 외곽선
- *   [광고]: 오른쪽 76px·위 61px, 30px, 흰색 반투명 / 워터마크: 가운데, 중심 y ≈1284px, 31px, 흰색 반투명
+ * 기본 디자인 수치는 저장소 루트의 레퍼런스(ref-slide*.jpg, 800×1000)를 픽셀 측정해 1080×1350(×1.35)로 옮긴 값.
+ *   표지 제목: 84px, 줄 간격 103px, 왼쪽 77px, 마지막 줄 바닥 ≈1185px, 검은 외곽선
+ *   본문 박스: x 169~911(폭 742, 가운데), y 953~1211(높이 258), 흰색 48% 반투명 + 1.5px 검은 테두리
+ *   본문 글자: 52px, 줄 간격 57px, 가운데 정렬, 검은 외곽선
+ *   [광고]: 오른쪽 76px·위 58px, 30px, 흰색 반투명 / 워터마크: 가운데, 위 1264px, 31px, 흰색 반투명
+ * 템플릿은 이 틀 위에서 글꼴·색·글상자·위치만 바꾼다.
  */
 // CSS 변수(var(--font-…))가 아닌 실제 글꼴 이름을 써야 PNG 저장(html-to-image) 때 글꼴이 함께 들어간다
-const TITLE_FONT = `${jua.style.fontFamily}, ${pretendard.style.fontFamily}, sans-serif`;
 const SMALL_FONT = `${pretendard.style.fontFamily}, sans-serif`;
-const BOX = { left: 167, width: 742, bottom: SLIDE_H - 1211, minHeight: 258 };
-const BOX_FILL = "rgba(255, 255, 255, 0.48)";
-const BOX_BORDER = "1.5px solid rgba(0, 0, 0, 0.6)";
+const COVER_INSET = { x: 77, y: 150 };
+const BODY_INSET = { x: 169, y: 139 };
 
-/** 글자 둘레를 검은 외곽선으로 감싸는 text-shadow (PNG 저장에서도 그대로 보이도록 stroke 대신 사용) */
-function outline(px: number, extra = ""): string {
+/** 글자 둘레를 테두리로 감싸는 text-shadow (PNG 저장에서도 그대로 보이도록 stroke 대신 사용) */
+function outline(px: number, color: string, extra = ""): string {
   const shadows: string[] = [];
   for (let i = 0; i < 16; i++) {
     const a = (i / 16) * Math.PI * 2;
-    shadows.push(`${(Math.cos(a) * px).toFixed(2)}px ${(Math.sin(a) * px).toFixed(2)}px 0 #000`);
+    shadows.push(`${(Math.cos(a) * px).toFixed(2)}px ${(Math.sin(a) * px).toFixed(2)}px 0 ${color}`);
   }
   if (extra) shadows.push(extra);
   return shadows.join(", ");
 }
-const TITLE_SHADOW = outline(4, "0 4px 10px rgba(0,0,0,0.45)");
-const BODY_SHADOW = outline(3);
 
 const lineCount = (t: string, perLine: number) =>
   t.split("\n").reduce((n, l) => n + Math.max(1, Math.ceil(l.length / perLine)), 0);
@@ -51,12 +55,30 @@ function bodySize(t: string) {
   return n <= 3 ? 52 : n === 4 ? 46 : 40;
 }
 
-type Props = { slide: Slide; index: number; watermark: string };
+const JUSTIFY: Record<TextStyle["pos"], CSSProperties["justifyContent"]> = {
+  top: "flex-start",
+  middle: "center",
+  bottom: "flex-end",
+};
+
+type Props = { slide: Slide; index: number; watermark: string; template?: Template };
 
 /** 실제 크기(1080×1350)로 그리는 슬라이드. PNG 저장 시 이 요소를 그대로 캡처한다. */
-export const SlideCanvas = forwardRef<HTMLDivElement, Props>(function SlideCanvas({ slide, index, watermark }, ref) {
+export const SlideCanvas = forwardRef<HTMLDivElement, Props>(function SlideCanvas(
+  { slide, index, watermark, template = DEFAULT_TEMPLATE },
+  ref,
+) {
   const cover = index === 0;
   const text = (cover ? slide.title : slide.body).trim();
+  const style = cover ? template.cover : template.body;
+  const inset = cover ? COVER_INSET : BODY_INSET;
+
+  const base = cover ? titleSize(text) : bodySize(text);
+  const size = Math.round(base * SIZE_SCALE[style.size]);
+  const outlineColor = isLight(style.color) ? "#000" : "#fff";
+  const shadow = style.outline
+    ? outline(cover ? 4 : 3, outlineColor, cover ? "0 4px 10px rgba(0,0,0,0.45)" : "")
+    : "none";
 
   const root: CSSProperties = {
     width: SLIDE_W,
@@ -68,8 +90,27 @@ export const SlideCanvas = forwardRef<HTMLDivElement, Props>(function SlideCanva
     overflowWrap: "break-word",
   };
 
-  const tSize = titleSize(text);
-  const bSize = bodySize(text);
+  const paragraph = (
+    <p
+      style={{
+        margin: 0,
+        width: "100%",
+        fontFamily: fontStack(style.fontId),
+        fontWeight: 400,
+        fontSize: size,
+        lineHeight: `${Math.round(size * (cover ? 1.23 : 1.1))}px`,
+        color: style.color,
+        textAlign: style.align,
+        whiteSpace: "pre-wrap",
+        textShadow: shadow,
+      }}
+    >
+      {text}
+    </p>
+  );
+
+  const wm = watermark.trim();
+  const wmTop = template.watermark.pos === "top-left";
 
   return (
     <div ref={ref} style={root}>
@@ -82,7 +123,7 @@ export const SlideCanvas = forwardRef<HTMLDivElement, Props>(function SlideCanva
         />
       )}
 
-      {/* (a) 쿠팡 파트너스 고지 */}
+      {/* (a) 쿠팡 파트너스 고지 — 법에서 요구하는 표시라 항상 넣는다 */}
       <div
         style={{
           position: "absolute",
@@ -99,84 +140,59 @@ export const SlideCanvas = forwardRef<HTMLDivElement, Props>(function SlideCanva
         [광고]
       </div>
 
-      {cover ? (
-        text && (
-          <h2
-            style={{
-              position: "absolute",
-              left: 77,
-              right: 77,
-              bottom: 150,
-              margin: 0,
-              fontFamily: TITLE_FONT,
-              fontWeight: 400,
-              fontSize: tSize,
-              lineHeight: `${Math.round(tSize * 1.23)}px`,
-              color: "#fff",
-              textAlign: "left",
-              whiteSpace: "pre-wrap",
-              textShadow: TITLE_SHADOW,
-            }}
-          >
-            {text}
-          </h2>
-        )
-      ) : (
-        text && (
-          <div
-            style={{
-              position: "absolute",
-              left: BOX.left,
-              width: BOX.width,
-              bottom: BOX.bottom,
-              minHeight: BOX.minHeight,
-              boxSizing: "border-box",
-              padding: "28px 30px",
-              background: BOX_FILL,
-              border: BOX_BORDER,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-            }}
-          >
-            <p
-              style={{
-                margin: 0,
-                width: "100%",
-                fontFamily: TITLE_FONT,
-                fontWeight: 400,
-                fontSize: bSize,
-                lineHeight: `${Math.round(bSize * 1.1)}px`,
-                color: "#fff",
-                textAlign: "center",
-                whiteSpace: "pre-wrap",
-                textShadow: BODY_SHADOW,
-              }}
-            >
-              {text}
-            </p>
-          </div>
-        )
-      )}
-
-      {/* (b) 워터마크 */}
-      {watermark.trim() && (
+      {/* (b) 글 (표지는 제목, 그 뒤는 본문) */}
+      {text && (
         <div
           style={{
             position: "absolute",
-            left: 0,
-            right: 0,
-            top: 1264,
-            textAlign: "center",
-            fontFamily: SMALL_FONT,
+            inset: 0,
+            display: "flex",
+            flexDirection: "column",
+            justifyContent: JUSTIFY[style.pos],
+            padding: `${inset.y}px ${inset.x}px`,
+            boxSizing: "border-box",
+          }}
+        >
+          {style.box ? (
+            <div
+              style={{
+                width: "100%",
+                minHeight: 258,
+                boxSizing: "border-box",
+                padding: "28px 30px",
+                background: rgba(style.boxColor, style.boxOpacity),
+                border: style.boxBorder ? "1.5px solid rgba(0, 0, 0, 0.6)" : "none",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              {paragraph}
+            </div>
+          ) : (
+            paragraph
+          )}
+        </div>
+      )}
+
+      {/* (c) 워터마크 */}
+      {wm && (
+        <div
+          style={{
+            position: "absolute",
+            left: template.watermark.pos === "bottom" ? 0 : 77,
+            right: template.watermark.pos === "bottom" ? 0 : undefined,
+            top: wmTop ? 58 : 1264,
+            textAlign: template.watermark.pos === "bottom" ? "center" : "left",
+            fontFamily: fontStack(template.watermark.fontId),
             fontSize: 31,
             fontWeight: 400,
             lineHeight: 1.3,
-            color: "rgba(255, 255, 255, 0.55)",
+            color: rgba(template.watermark.color, template.watermark.opacity),
             textShadow: "0 1px 3px rgba(0,0,0,0.2)",
           }}
         >
-          {watermark.trim()}
+          {wm}
         </div>
       )}
     </div>

@@ -1,12 +1,22 @@
 "use client";
 
 import { useEffect, useRef, useState, type Dispatch, type SetStateAction } from "react";
-import { DEFAULT_WATERMARK, SLIDE_H, SLIDE_W, SlidePreview } from "./SlideCard";
+import { SLIDE_H, SLIDE_W, SlidePreview } from "./SlideCard";
+import TemplateManager from "./TemplateManager";
 import { coverCrop, resizeImage } from "@/lib/client-images";
 import { downloadZip, renderSlides, triggerDownload } from "@/lib/export";
+import { loadFonts } from "@/lib/webfonts";
+import {
+  BUILTIN_TEMPLATES,
+  DEFAULT_TEMPLATE,
+  allTemplates,
+  findTemplate,
+  loadActiveId,
+  saveActiveId,
+  templateFontIds,
+  type Template,
+} from "@/lib/templates";
 import type { Slide } from "@/lib/types";
-
-const WATERMARK_KEY = "cardnews.watermark";
 
 // 'AI 새 사진' 기능 스위치 (빌드 시 값이 들어감). 기본 켜짐, "0"이면 끔
 const IMAGE_GEN_ENABLED = process.env.NEXT_PUBLIC_ENABLE_IMAGE_GEN !== "0";
@@ -21,7 +31,10 @@ type Props = {
 };
 
 export default function Editor({ slides, caption, onChangeSlides, onChangeCaption, onRemixAgain, onRestart }: Props) {
-  const [watermark, setWatermark] = useState(DEFAULT_WATERMARK);
+  const [watermark, setWatermark] = useState(DEFAULT_TEMPLATE.watermark.text);
+  const [templates, setTemplates] = useState<Template[]>(BUILTIN_TEMPLATES);
+  const [templateId, setTemplateId] = useState(DEFAULT_TEMPLATE.id);
+  const [showTemplates, setShowTemplates] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [results, setResults] = useState<string[] | null>(null);
@@ -32,19 +45,33 @@ export default function Editor({ slides, caption, onChangeSlides, onChangeCaptio
   const nodes = useRef<(HTMLDivElement | null)[]>([]);
   const resultBlobs = useRef<Blob[]>([]);
 
-  // 워터마크 문구는 다음에 또 쓰도록 이 브라우저에 기억
+  const template = findTemplate(templates, templateId);
+
+  // 저장해 둔 템플릿 목록을 불러와 지난번에 고른 템플릿으로 시작
   useEffect(() => {
-    try {
-      const saved = localStorage.getItem(WATERMARK_KEY);
-      if (saved !== null) setWatermark(saved);
-    } catch {}
+    const list = allTemplates();
+    setTemplates(list);
+    applyTemplate(loadActiveId(), list);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // 템플릿이 쓰는 글꼴을 미리 내려받아 두어야 미리보기·저장본에 제대로 들어간다
+  useEffect(() => {
+    loadFonts(templateFontIds(template));
+  }, [template]);
+
+  /** 템플릿을 바꾸면 워터마크 문구도 그 템플릿에 저장된 문구로 맞춘다 */
+  function applyTemplate(id: string, list: Template[] = templates) {
+    const t = findTemplate(list, id);
+    setTemplateId(t.id);
+    saveActiveId(t.id);
+    setWatermark(t.watermark.text);
+    setResults(null);
+  }
+
   const changeWatermark = (v: string) => {
     setWatermark(v);
     setResults(null);
-    try {
-      localStorage.setItem(WATERMARK_KEY, v);
-    } catch {}
   };
 
   const update = (i: number, patch: Partial<Slide>) => {
@@ -114,6 +141,8 @@ export default function Editor({ slides, caption, onChangeSlides, onChangeCaptio
     setError(null);
     setBusy(`완성본 만드는 중… (0 / ${slides.length}장)`);
     try {
+      // 템플릿 글꼴이 다 내려와야 저장본에도 그 글꼴로 찍힌다
+      await loadFonts(templateFontIds(template));
       const els = nodes.current.slice(0, slides.length).filter((n): n is HTMLDivElement => !!n);
       const blobs = await renderSlides(els, (d) => setBusy(`완성본 만드는 중… (${d} / ${slides.length}장)`));
       resultBlobs.current = blobs;
@@ -134,9 +163,24 @@ export default function Editor({ slides, caption, onChangeSlides, onChangeCaptio
 
       {error && <div className="notice notice-error" role="alert">{error}</div>}
 
+      <section className="card stack">
+        <h2 style={{ margin: 0 }}>① 디자인 템플릿</h2>
+        <div>
+          <label className="field-label" htmlFor="template">글꼴·색·글상자를 미리 정해 둔 디자인이에요</label>
+          <select id="template" value={templateId} onChange={(e) => applyTemplate(e.target.value)}>
+            {templates.map((t) => (
+              <option key={t.id} value={t.id}>{t.name}{t.builtin ? " (기본 제공)" : ""}</option>
+            ))}
+          </select>
+        </div>
+        <button className="btn btn-secondary btn-block" onClick={() => setShowTemplates(true)}>
+          🎨 템플릿 만들기 · 고치기
+        </button>
+      </section>
+
       <section className="card">
-        <h2>① 워터마크 문구</h2>
-        <label className="field-label" htmlFor="watermark">모든 장 맨 아래 가운데에 들어가는 글씨예요</label>
+        <h2>② 워터마크 문구</h2>
+        <label className="field-label" htmlFor="watermark">모든 장에 들어가는 내 가게·채널 이름이에요</label>
         <input
           id="watermark"
           type="text"
@@ -147,7 +191,7 @@ export default function Editor({ slides, caption, onChangeSlides, onChangeCaptio
         />
       </section>
 
-      <h2 style={{ marginTop: 40 }}>② 장마다 사진·글 확인하기</h2>
+      <h2 style={{ marginTop: 40 }}>③ 장마다 사진·글 확인하기</h2>
       <div className="slide-editor">
         {slides.map((s, i) => {
           const cover = i === 0;
@@ -160,6 +204,7 @@ export default function Editor({ slides, caption, onChangeSlides, onChangeCaptio
                 slide={s}
                 index={i}
                 watermark={watermark}
+                template={template}
                 overlay={
                   genIndex === i && (
                     <div className="preview-overlay" role="status">
@@ -228,7 +273,7 @@ export default function Editor({ slides, caption, onChangeSlides, onChangeCaptio
       </div>
 
       <section className="card" style={{ marginTop: 40 }}>
-        <h2>③ 캡션(본문 글) 확인하기</h2>
+        <h2>④ 캡션(본문 글) 확인하기</h2>
         <textarea rows={10} value={caption} onChange={(e) => onChangeCaption(e.target.value)} aria-label="캡션" />
         <button className="btn btn-secondary btn-block" style={{ marginTop: 16 }} onClick={copyCaption}>
           {copied ? "✓ 복사됐어요" : "📋 캡션 복사하기"}
@@ -270,6 +315,22 @@ export default function Editor({ slides, caption, onChangeSlides, onChangeCaptio
           </button>
         </div>
       </div>
+
+      {/* 템플릿 편집은 겹쳐 띄운다 — 다른 화면으로 넘어가면 고치던 카드뉴스가 사라지기 때문 */}
+      {showTemplates && (
+        <div className="overlay-page">
+          <div className="page">
+            <TemplateManager
+              onClose={() => setShowTemplates(false)}
+              onPick={(id) => {
+                const list = allTemplates();
+                setTemplates(list);
+                applyTemplate(id, list);
+              }}
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 }
