@@ -1,0 +1,29 @@
+{
+  "name": "cardnews-remixer",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "typecheck": "tsc --noEmit",
+    "test:e2e": "node scripts/e2e.cjs",
+    "test:ai": "node scripts/test-ai.mjs"
+  },
+  "dependencies": {
+    "html-to-image": "^1.11.13",
+    "jszip": "^3.10.2",
+    "next": "^16.4.3",
+    "openai": "^7.45.1",
+    "pretendard": "^1.3.9",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.6",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "typescript": "^7.0.2"
+  }
+}
