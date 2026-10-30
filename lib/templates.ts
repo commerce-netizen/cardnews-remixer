@@ -1,3 +1,4 @@
+import { DEFAULT_BOTTOM_CTA, DEFAULT_TOP_CTA } from "./caption";
 import { DEFAULT_FONT_ID } from "./webfonts";
 
 /**
@@ -36,6 +37,12 @@ export type WatermarkStyle = {
   pos: "bottom" | "bottom-left" | "top-left";
 };
 
+/** 인스타 캡션의 맨 윗줄·맨 아랫줄 CTA (가운데 본문은 AI가 각색) */
+export type CaptionStyle = {
+  topCta: string;
+  bottomCta: string;
+};
+
 export type Template = {
   id: string;
   name: string;
@@ -44,6 +51,7 @@ export type Template = {
   cover: TextStyle;
   body: TextStyle;
   watermark: WatermarkStyle;
+  caption: CaptionStyle;
 };
 
 export const DEFAULT_WATERMARK = "맛집도둑";
@@ -93,6 +101,11 @@ const DEFAULT_WATERMARK_STYLE: WatermarkStyle = {
   pos: "bottom",
 };
 
+const DEFAULT_CAPTION: CaptionStyle = {
+  topCta: DEFAULT_TOP_CTA,
+  bottomCta: DEFAULT_BOTTOM_CTA,
+};
+
 export const BUILTIN_TEMPLATES: Template[] = [
   {
     id: "default",
@@ -101,6 +114,7 @@ export const BUILTIN_TEMPLATES: Template[] = [
     cover: DEFAULT_COVER,
     body: DEFAULT_BODY,
     watermark: DEFAULT_WATERMARK_STYLE,
+    caption: DEFAULT_CAPTION,
   },
   {
     id: "subtitle-black",
@@ -117,6 +131,7 @@ export const BUILTIN_TEMPLATES: Template[] = [
       boxBorder: false,
     },
     watermark: { ...DEFAULT_WATERMARK_STYLE, fontId: "pretendard", opacity: 70 },
+    caption: DEFAULT_CAPTION,
   },
   {
     id: "clean-white",
@@ -133,6 +148,7 @@ export const BUILTIN_TEMPLATES: Template[] = [
       boxBorder: false,
     },
     watermark: { ...DEFAULT_WATERMARK_STYLE, opacity: 65 },
+    caption: DEFAULT_CAPTION,
   },
 ];
 
@@ -148,7 +164,8 @@ export function loadUserTemplates(): Template[] {
     if (!raw) return [];
     const list = JSON.parse(raw);
     if (!Array.isArray(list)) return [];
-    return list.filter(isTemplate).map((t) => ({ ...t, builtin: false }));
+    // 예전에 저장한 템플릿엔 caption이 없을 수 있어 기본값으로 채운다
+    return list.filter(isTemplate).map((t) => ({ ...t, builtin: false, caption: { ...DEFAULT_CAPTION, ...t.caption } }));
   } catch {
     return [];
   }

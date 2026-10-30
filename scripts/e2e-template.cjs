@@ -51,7 +51,16 @@ const BASE = `http://127.0.0.1:${PORT}`;
     assert.equal(await page.locator("text=글상자 색").count(), 0, "글상자를 끄면 색·진하기 설정은 숨는다");
 
     await page.fill("#wm-text", "테스트가게");
-    console.log("✓ 표지·내지 글꼴/색/크기, 글상자, 워터마크 설정");
+
+    // 캡션 CTA (맨 윗줄·맨 아랫줄)
+    await page.fill("#cta-top", "😋 레시피 원하면 '나도'!");
+    await page.fill("#cta-bottom", "💬 저장하고 따라 해 보세요 👉");
+    const ctaPreview = await page.locator(".caption-preview").innerText();
+    assert.ok(ctaPreview.startsWith("😋 레시피 원하면 '나도'!"), "맨 윗줄 CTA");
+    assert.ok(/💬 저장하고 따라 해 보세요 👉/.test(ctaPreview), "맨 아랫줄 CTA");
+    assert.ok(/쿠팡 파트너스 활동의 일환/.test(ctaPreview), "쿠팡 고지는 항상 맨 끝");
+    assert.ok(ctaPreview.indexOf("💬 저장하고") < ctaPreview.indexOf("쿠팡 파트너스"), "고지가 CTA 뒤");
+    console.log("✓ 표지·내지 글꼴/색/크기, 글상자, 워터마크, 캡션 CTA 설정");
 
     // CDN 글꼴이 실제로 내려와 미리보기에 쓰이는지
     await page.waitForFunction(() => document.fonts.check('80px "Gmarket Sans"'), null, { timeout: 30_000 });
@@ -95,6 +104,10 @@ const BASE = `http://127.0.0.1:${PORT}`;
 
     assert.equal(await page.locator("#template").inputValue(), await templateIdOf(page, "내 테스트 디자인"));
     assert.equal(await page.inputValue("#watermark"), "테스트가게", "템플릿에 저장한 워터마크 문구가 따라온다");
+    const cap = await page.inputValue('textarea[aria-label="캡션"]');
+    assert.ok(cap.startsWith("😋 레시피 원하면 '나도'!\n\n"), "캡션 맨 윗줄 = 템플릿 CTA");
+    assert.ok(cap.trimEnd().endsWith("수수료를 제공받습니다."), "캡션 맨 끝 = 쿠팡 고지");
+    assert.ok(/💬 저장하고 따라 해 보세요 👉/.test(cap), "캡션 맨 아랫줄 CTA");
     await page.waitForFunction(() => document.fonts.check('80px "BM DOHYEON"'), null, { timeout: 30_000 });
     const coverFont = await page.evaluate(
       () => getComputedStyle(document.querySelector(".preview-frame p")).fontFamily,
@@ -108,7 +121,9 @@ const BASE = `http://127.0.0.1:${PORT}`;
       () => !getComputedStyle(document.querySelector(".preview-frame p")).fontFamily.includes("BM DOHYEON"),
     );
     assert.equal(await page.inputValue("#watermark"), "맛집도둑");
-    console.log("✓ 템플릿을 바꾸면 미리보기·워터마크가 따라 바뀜");
+    const capDefault = await page.inputValue('textarea[aria-label="캡션"]');
+    assert.ok(capDefault.startsWith("🤤 댓글에 '나도' 남겨주세요!"), "템플릿 바꾸면 캡션 CTA도 바뀜");
+    console.log("✓ 템플릿을 바꾸면 미리보기·워터마크·캡션 CTA가 따라 바뀜");
 
     // 겹쳐 띄운 템플릿 화면 — 고치던 카드뉴스가 사라지지 않아야 한다
     await page.fill("#text0", "안 사라지는 제목");

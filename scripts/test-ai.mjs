@@ -154,11 +154,12 @@ try {
   };
 
   const cases = [
-    ["각색 정상 → 슬라이드·캡션 + 고지 문구", () => remix("CASE:ok"), (r) => {
+    ["각색 정상 → 슬라이드 + 캡션 본문(CTA·고지는 화면에서 붙임)", () => remix("CASE:ok"), (r) => {
       assert.equal(r.status, 200);
       assert.equal(r.json.slides.length, 2);
       assert.equal(r.json.slides[0].title, good.slides[0].title);
-      assert.match(r.json.caption, /쿠팡 파트너스 활동의 일환/);
+      assert.equal(r.json.caption, good.caption.trim());
+      assert.ok(!/쿠팡 파트너스 활동의 일환/.test(r.json.caption), "고지 문구는 서버가 붙이지 않는다");
       const { path, body } = last();
       assert.equal(path, "/v1/responses");
       assert.equal(body.model, "gpt-5-mini");
@@ -167,6 +168,14 @@ try {
       assert.equal(body.reasoning.effort, "low");
       assert.ok(body.max_output_tokens <= 8000);
       assert.ok(body.instructions.includes("각색 원칙"));
+      // 레퍼런스에서 뽑은 형식 규칙이 프롬프트에 들어가 있는지
+      const ins = body.instructions;
+      assert.ok(ins.includes("정확히 3줄"), "슬라이드 3줄 규칙");
+      assert.ok(ins.includes("이모지는 절대 쓰지 않습니다"), "슬라이드 이모지 금지");
+      assert.ok(ins.includes("반말 구어체"), "슬라이드 반말 톤");
+      assert.ok(ins.includes("존댓말 '~요'체"), "캡션 존댓말 톤");
+      assert.ok(ins.includes("정확히 3문장"), "캡션 3문장 규칙");
+      assert.ok(/CTA 문구·해시태그·쿠팡 파트너스 고지는 넣지 마세요/.test(ins), "캡션에 CTA·고지 금지");
     }],
     ["사진 글씨 읽기(vision) 요청 형식", () => remix("CASE:ok", { imageDataUrls: [tinyJpeg, tinyJpeg] }), (r) => {
       assert.equal(r.status, 200);

@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useRef, useState, type Dispatch, type SetStateAction } from "react";
+import { useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from "react";
 import { SLIDE_H, SLIDE_W, SlidePreview } from "./SlideCard";
 import TemplateManager from "./TemplateManager";
 import { coverCrop, resizeImage } from "@/lib/client-images";
 import { downloadZip, renderSlides, triggerDownload } from "@/lib/export";
+import { buildCaption } from "@/lib/caption";
 import { loadFonts } from "@/lib/webfonts";
 import {
   BUILTIN_TEMPLATES,
@@ -23,14 +24,15 @@ const IMAGE_GEN_ENABLED = process.env.NEXT_PUBLIC_ENABLE_IMAGE_GEN !== "0";
 
 type Props = {
   slides: Slide[];
-  caption: string;
+  /** AI가 각색한 캡션 본문 (CTA·고지 문구 없이). 템플릿 CTA를 붙여 완성한다 */
+  captionBody: string;
   onChangeSlides: Dispatch<SetStateAction<Slide[]>>;
-  onChangeCaption: (c: string) => void;
   onRemixAgain: () => void;
   onRestart: () => void;
 };
 
-export default function Editor({ slides, caption, onChangeSlides, onChangeCaption, onRemixAgain, onRestart }: Props) {
+export default function Editor({ slides, captionBody, onChangeSlides, onRemixAgain, onRestart }: Props) {
+  const [caption, setCaption] = useState("");
   const [watermark, setWatermark] = useState(DEFAULT_TEMPLATE.watermark.text);
   const [templates, setTemplates] = useState<Template[]>(BUILTIN_TEMPLATES);
   const [templateId, setTemplateId] = useState(DEFAULT_TEMPLATE.id);
@@ -45,7 +47,7 @@ export default function Editor({ slides, caption, onChangeSlides, onChangeCaptio
   const nodes = useRef<(HTMLDivElement | null)[]>([]);
   const resultBlobs = useRef<Blob[]>([]);
 
-  const template = findTemplate(templates, templateId);
+  const template = useMemo(() => findTemplate(templates, templateId), [templates, templateId]);
 
   // 저장해 둔 템플릿 목록을 불러와 지난번에 고른 템플릿으로 시작
   useEffect(() => {
@@ -59,6 +61,12 @@ export default function Editor({ slides, caption, onChangeSlides, onChangeCaptio
   useEffect(() => {
     loadFonts(templateFontIds(template));
   }, [template]);
+
+  // 캡션 = 템플릿의 CTA + AI 본문 + 쿠팡 고지. 본문이나 템플릿이 바뀌면 다시 맞춘다
+  useEffect(() => {
+    setCaption(buildCaption(captionBody, template));
+    setResults(null);
+  }, [captionBody, template]);
 
   /** 템플릿을 바꾸면 워터마크 문구도 그 템플릿에 저장된 문구로 맞춘다 */
   function applyTemplate(id: string, list: Template[] = templates) {
@@ -274,7 +282,10 @@ export default function Editor({ slides, caption, onChangeSlides, onChangeCaptio
 
       <section className="card" style={{ marginTop: 40 }}>
         <h2>④ 캡션(본문 글) 확인하기</h2>
-        <textarea rows={10} value={caption} onChange={(e) => onChangeCaption(e.target.value)} aria-label="캡션" />
+        <textarea rows={12} value={caption} onChange={(e) => { setCaption(e.target.value); setResults(null); }} aria-label="캡션" />
+        <p className="muted small" style={{ margin: "12px 0 0" }}>
+          맨 윗줄·맨 아랫줄 문구는 <b>템플릿</b>에서 바꿀 수 있어요. 여기서 고친 건 이번 한 번만 적용돼요.
+        </p>
         <button className="btn btn-secondary btn-block" style={{ marginTop: 16 }} onClick={copyCaption}>
           {copied ? "✓ 복사됐어요" : "📋 캡션 복사하기"}
         </button>
