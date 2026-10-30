@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { extractInstagram, ExtractError } from "@/lib/instagram";
 
 export const runtime = "nodejs";
+// 인스타가 막으면 렌더링 프록시로 다시 받는데 10~30초 걸릴 수 있다
+export const maxDuration = 90;
 
 export async function POST(req: Request) {
   const { url } = (await req.json().catch(() => ({}))) as { url?: string };

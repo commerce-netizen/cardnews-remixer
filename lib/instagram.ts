@@ -92,12 +92,8 @@ async function viaGraphql(code: string): Promise<ExtractResult | null> {
   return media ? fromMedia(media) : null;
 }
 
-/** 방법 2: 공개 임베드 페이지 (로그인 없이 열리는 경우가 많음) */
-async function viaEmbed(code: string): Promise<ExtractResult | null> {
-  const res = await get(`https://www.instagram.com/p/${code}/embed/captioned/`);
-  if (!res.ok) return null;
-  const html = await res.text();
-
+/** 임베드 페이지 HTML에서 게시물 데이터 뽑기 (직접 요청·프록시가 함께 쓴다) */
+function parseEmbedHtml(html: string): ExtractResult | null {
   // 임베드 페이지 안의 "contextJSON":"{...}" (문자열로 감싼 JSON)에서 게시물 데이터 찾기
   const ctx = readJsonStringAfter(html, '"contextJSON":');
   if (ctx) {
@@ -126,6 +122,36 @@ async function viaEmbed(code: string): Promise<ExtractResult | null> {
       ).trim()
     : "";
   return imgs.length || caption ? { imageUrls: imgs, caption } : null;
+}
+
+/** 방법 2: 공개 임베드 페이지 직접 요청 */
+async function viaEmbed(code: string): Promise<ExtractResult | null> {
+  const res = await get(`https://www.instagram.com/p/${code}/embed/captioned/`);
+  if (!res.ok) return null;
+  return parseEmbedHtml(await res.text());
+}
+
+/**
+ * 방법 3: r.jina.ai 로 임베드 페이지를 **브라우저처럼 렌더링해서** 가져온다.
+ *
+ * 인스타는 서버(특히 클라우드 IP)에서 바로 받으면 데이터 없는 껍데기 HTML만 돌려준다.
+ * r.jina.ai 는 자기들 브라우저로 열어 렌더링된 HTML을 주기 때문에, 그 안에 들어 있는
+ * contextJSON(= GraphQL 원본 데이터)을 그대로 읽을 수 있다 → 캐러셀 전체 + 캡션 전문.
+ * 느리니(10~30초) 직접 요청이 실패했을 때만 쓴다. JINA_API_KEY 를 넣으면 호출 한도가 넉넉해진다.
+ */
+async function viaJinaEmbed(code: string): Promise<ExtractResult | null> {
+  const key = process.env.JINA_API_KEY;
+  const res = await fetch(`https://r.jina.ai/https://www.instagram.com/p/${code}/embed/captioned/`, {
+    headers: {
+      "x-respond-with": "html",
+      "x-no-cache": "true",
+      ...(key ? { Authorization: `Bearer ${key}` } : {}),
+    },
+    signal: AbortSignal.timeout(50_000),
+    cache: "no-store",
+  });
+  if (!res.ok) return null;
+  return parseEmbedHtml(await res.text());
 }
 
 /** 방법 3: 게시물 페이지의 og 태그 (첫 장 이미지 + 캡션 일부만) */
@@ -177,7 +203,8 @@ export async function extractInstagram(input: string): Promise<ExtractResult> {
   const code = parseShortcode(input);
   let partial = null as ExtractResult | null;
 
-  for (const method of [viaGraphql, viaEmbed, viaOgTags]) {
+  // 빠른 것부터: 직접 요청 두 가지 → 렌더링 프록시 → og 태그(1장뿐)
+  for (const method of [viaGraphql, viaEmbed, viaJinaEmbed, viaOgTags]) {
     try {
       const r = await method(code);
       if (!r) continue;
@@ -198,6 +225,7 @@ export async function extractInstagram(input: string): Promise<ExtractResult> {
       "인스타그램에서 게시물을 가져오지 못했어요. 비공개 게시물이거나 인스타그램이 막고 있을 수 있어요.",
     );
   }
+  // 캐러셀 전체를 못 가져왔더라도 1장이라도 있으면 그걸로 진행한다
   return partial;
 }
 
