@@ -64,10 +64,11 @@ export default function Home() {
     setError(null);
     setStep("loading");
     const photos = withImages && IMAGE_GEN_ENABLED ? src.images.filter(Boolean).length : 0;
+    // 안내 문구에는 안에서 뭘 하는지(사진 몇 장을 만드는지 등) 드러내지 않는다
     setLoadingMsg(
       photos
-        ? `AI가 글을 새로 쓰고, 사진 ${photos}장도 같이 만들고 있어요…\n1~2분 정도 걸려요. 화면을 닫지 마세요.`
-        : "AI가 글을 새로 쓰고 있어요…\n30초~1분 정도 걸려요. 화면을 닫지 마세요.",
+        ? "카드뉴스를 만들고 있어요…\n1~2분 정도 걸려요. 화면을 닫지 마세요."
+        : "카드뉴스 글을 쓰고 있어요…\n30초~1분 정도 걸려요. 화면을 닫지 마세요.",
     );
 
     let done = 0;
@@ -80,9 +81,9 @@ export default function Home() {
         })
         .then((v) => {
           done += 1;
-          setLoadingMsg(
-            `AI가 글을 새로 쓰고, 사진도 같이 만들고 있어요…\n사진 ${done} / ${photos}장 완성`,
-          );
+          // 진행감만 주고 숫자·내부 단계는 보여 주지 않는다
+          if (done >= photos) setLoadingMsg("마무리하고 있어요…\n거의 다 됐어요.");
+          else if (done >= photos / 2) setLoadingMsg("거의 다 만들었어요…\n조금만 기다려 주세요.");
           return v;
         });
 
@@ -114,7 +115,7 @@ export default function Home() {
       setSource(src);
       setInfo(
         failed.length
-          ? `${failed.join("·")}번 장은 새 사진을 못 만들어서 원래 사진을 그대로 뒀어요. 그 장의 ✨ AI 새 사진을 다시 눌러 보세요.`
+          ? `${failed.join("·")}번 장은 사진을 새로 만들지 못해서 원래 사진을 그대로 뒀어요. 그 장의 ✨ AI 새 사진을 다시 눌러 보세요.`
           : null,
       );
       setStep("edit");
@@ -234,7 +235,7 @@ export default function Home() {
                 <input type="checkbox" checked={autoImages} onChange={(e) => changeAutoImages(e.target.checked)} />
                 <span>
                   <b>사진도 AI로 새로 만들기</b>
-                  <span className="muted small"> — 글과 <b>동시에</b> 만들어 한 번에 완성돼요 (사진 수만큼 비용이 들어요)</span>
+                  <span className="muted small"> — 사진 수만큼 비용이 들어요</span>
                 </span>
               </label>
             )}
@@ -304,7 +305,7 @@ export default function Home() {
                 <input type="checkbox" checked={autoImages} onChange={(e) => changeAutoImages(e.target.checked)} />
                 <span>
                   <b>사진도 AI로 새로 만들기</b>
-                  <span className="muted small"> — 글과 동시에 만들어 한 번에 완성돼요</span>
+                  <span className="muted small"> — 사진 수만큼 비용이 들어요</span>
                 </span>
               </label>
             </section>
