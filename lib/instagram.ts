@@ -1,3 +1,5 @@
+import https from "node:https";
+import zlib from "node:zlib";
 import { UserFacingError } from "./errors";
 import type { ExtractResult } from "./types";
 
@@ -54,11 +56,79 @@ function fromMedia(m: Media): ExtractResult {
   return { imageUrls, caption };
 }
 
+/**
+ * 실제 크롬이 보내는 헤더 세트.
+ *
+ * 이게 핵심이다 — UA만 바꿔 보내면 인스타가 **데이터 없는 껍데기 HTML**(500KB 넘는 JS 번들)을 준다.
+ * 브라우저처럼 Accept / Sec-Fetch-* / sec-ch-ua / Referer 까지 갖춰 보내야 데이터가 든 진짜 페이지가 온다.
+ * 임베드는 iframe 안에서 열리는 페이지라 Sec-Fetch-Dest: iframe 이 특히 중요하다. (실측 확인)
+ */
+const BROWSER_HEADERS: Record<string, string> = {
+  "User-Agent": UA,
+  Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+  "Accept-Language": "ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7",
+  "Upgrade-Insecure-Requests": "1",
+  "sec-ch-ua": '"Chromium";v="130", "Not?A_Brand";v="99"',
+  "sec-ch-ua-mobile": "?0",
+  "sec-ch-ua-platform": '"macOS"',
+};
+
+const EMBED_HEADERS: Record<string, string> = {
+  ...BROWSER_HEADERS,
+  "Sec-Fetch-Dest": "iframe",
+  "Sec-Fetch-Mode": "navigate",
+  "Sec-Fetch-Site": "cross-site",
+  Referer: "https://www.google.com/",
+};
+
+/**
+ * 페이지 받아오기 — **fetch 를 쓰지 않는다.**
+ *
+ * fetch(undici)는 스펙대로 `Sec-Fetch-Mode` 를 항상 `cors` 로 덮어쓴다. 그런데 인스타는
+ * 이 값이 `navigate` 가 아니면 데이터 없는 껍데기 HTML을 돌려준다. (실측: fetch=껍데기 / node:https=데이터 있음)
+ * 그래서 헤더를 그대로 보낼 수 있는 node:https 로 직접 요청한다.
+ */
+function rawGet(
+  url: string,
+  headers: Record<string, string>,
+  redirectsLeft = 3,
+): Promise<{ status: number; body: string }> {
+  return new Promise((resolve, reject) => {
+    const u = new URL(url);
+    const req = https.request(
+      {
+        host: u.hostname,
+        path: u.pathname + u.search,
+        method: "GET",
+        headers: { ...headers, "Accept-Encoding": "gzip, deflate" },
+      },
+      (res) => {
+        const loc = res.headers.location;
+        if (loc && res.statusCode && res.statusCode >= 300 && res.statusCode < 400) {
+          res.resume();
+          if (redirectsLeft <= 0) return resolve({ status: res.statusCode, body: "" });
+          return rawGet(new URL(loc, url).toString(), headers, redirectsLeft - 1).then(resolve, reject);
+        }
+        const enc = res.headers["content-encoding"];
+        const stream =
+          enc === "gzip" ? res.pipe(zlib.createGunzip()) : enc === "deflate" ? res.pipe(zlib.createInflate()) : res;
+        const chunks: Buffer[] = [];
+        stream.on("data", (c: Buffer) => chunks.push(c));
+        stream.on("end", () => resolve({ status: res.statusCode ?? 0, body: Buffer.concat(chunks).toString("utf8") }));
+        stream.on("error", reject);
+      },
+    );
+    req.on("error", reject);
+    req.setTimeout(15_000, () => req.destroy(new Error("instagram timeout")));
+    req.end();
+  });
+}
+
 async function get(url: string, init?: RequestInit): Promise<Response> {
   return fetch(url, {
     ...init,
-    headers: { "User-Agent": UA, "Accept-Language": "ko-KR,ko;q=0.9", ...init?.headers },
-    signal: AbortSignal.timeout(12_000),
+    headers: { ...BROWSER_HEADERS, ...init?.headers },
+    signal: AbortSignal.timeout(15_000),
     cache: "no-store",
   });
 }
@@ -126,9 +196,9 @@ function parseEmbedHtml(html: string): ExtractResult | null {
 
 /** 방법 2: 공개 임베드 페이지 직접 요청 */
 async function viaEmbed(code: string): Promise<ExtractResult | null> {
-  const res = await get(`https://www.instagram.com/p/${code}/embed/captioned/`);
-  if (!res.ok) return null;
-  return parseEmbedHtml(await res.text());
+  const res = await rawGet(`https://www.instagram.com/p/${code}/embed/captioned/`, EMBED_HEADERS);
+  if (res.status !== 200) return null;
+  return parseEmbedHtml(res.body);
 }
 
 /**
@@ -137,7 +207,9 @@ async function viaEmbed(code: string): Promise<ExtractResult | null> {
  * 인스타는 서버(특히 클라우드 IP)에서 바로 받으면 데이터 없는 껍데기 HTML만 돌려준다.
  * r.jina.ai 는 자기들 브라우저로 열어 렌더링된 HTML을 주기 때문에, 그 안에 들어 있는
  * contextJSON(= GraphQL 원본 데이터)을 그대로 읽을 수 있다 → 캐러셀 전체 + 캡션 전문.
- * 느리니(10~30초) 직접 요청이 실패했을 때만 쓴다. JINA_API_KEY 를 넣으면 호출 한도가 넉넉해진다.
+ * 느리니(10~30초) 직접 요청이 실패했을 때만 쓴다.
+ * 주의: 키 없이 쓰면 다른 사용자의 남용 때문에 도메인 단위로 몇 시간씩 막힐 수 있다(403 AbuseAlleviationError).
+ * JINA_API_KEY 를 넣으면 익명이 아니게 되어 그 차단을 피하고 한도도 넉넉해진다.
  */
 async function viaJinaEmbed(code: string): Promise<ExtractResult | null> {
   const key = process.env.JINA_API_KEY;
@@ -156,9 +228,14 @@ async function viaJinaEmbed(code: string): Promise<ExtractResult | null> {
 
 /** 방법 3: 게시물 페이지의 og 태그 (첫 장 이미지 + 캡션 일부만) */
 async function viaOgTags(code: string): Promise<ExtractResult | null> {
-  const res = await get(`https://www.instagram.com/p/${code}/`);
-  if (!res.ok) return null;
-  const html = await res.text();
+  const res = await rawGet(`https://www.instagram.com/p/${code}/`, {
+    ...BROWSER_HEADERS,
+    "Sec-Fetch-Dest": "document",
+    "Sec-Fetch-Mode": "navigate",
+    "Sec-Fetch-Site": "none",
+  });
+  if (res.status !== 200) return null;
+  const html = res.body;
   const og = (p: string) =>
     html.match(new RegExp(`<meta property="og:${p}" content="([^"]*)"`))?.[1];
   const image = og("image");
@@ -203,8 +280,8 @@ export async function extractInstagram(input: string): Promise<ExtractResult> {
   const code = parseShortcode(input);
   let partial = null as ExtractResult | null;
 
-  // 빠른 것부터: 직접 요청 두 가지 → 렌더링 프록시 → og 태그(1장뿐)
-  for (const method of [viaGraphql, viaEmbed, viaJinaEmbed, viaOgTags]) {
+  // 임베드가 가장 잘 된다(캐러셀 전체+캡션 전문). 그다음 GraphQL, 막히면 렌더링 프록시, 마지막이 og(1장뿐)
+  for (const method of [viaEmbed, viaGraphql, viaJinaEmbed, viaOgTags]) {
     try {
       const r = await method(code);
       if (!r) continue;

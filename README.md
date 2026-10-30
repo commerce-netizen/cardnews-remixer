@@ -104,13 +104,25 @@
 |---|---|
 | `i.instagram.com/api/v1/media/{id}/info` | `login_required` (403) |
 | `www.instagram.com/api/v1/media/{id}/info` | 로그인으로 302 |
-| 임베드 페이지 직접 요청 | 200이지만 **미디어 데이터 0** (JS 껍데기) |
+| 임베드 페이지 직접 요청(`fetch`) | 200이지만 **미디어 데이터 0** (JS 껍데기) |
+| 임베드 페이지 직접 요청(`node:https`) | ✅ **캐러셀 전체 + 캡션 전문** |
 | ddinstagram / kkinstagram 미러 | 접속 불가 |
 | **r.jina.ai 로 임베드 페이지 렌더링** | ✅ **캐러셀 10장 전체 + 캡션 전문** |
 
-그래서 직접 요청이 실패하면 **`r.jina.ai` 가 자기들 브라우저로 임베드 페이지를 열어 렌더링한 HTML**을 받아옵니다.
+### 왜 `fetch` 로는 안 되는가 (핵심)
+
+**`fetch`(undici)는 스펙대로 `Sec-Fetch-Mode` 를 항상 `cors` 로 덮어씁니다.**
+인스타는 이 값이 `navigate` 가 아니면 데이터 없는 껍데기를 돌려줍니다.
+헤더를 아무리 맞춰도 `fetch` 로는 뚫리지 않아서, 헤더를 그대로 보낼 수 있는
+**`node:https` 로 직접 요청**합니다 (`rawGet`). 브라우저와 같은 헤더 세트
+(`Accept` / `Accept-Language` / `Sec-Fetch-Dest: iframe` / `Sec-Fetch-Mode: navigate` /
+`sec-ch-ua*` / `Referer`)를 통째로 보내야 합니다 — 일부만 보내면 또 껍데기가 옵니다.
+
+그래도 실패하면 **`r.jina.ai` 가 자기들 브라우저로 임베드 페이지를 열어 렌더링한 HTML**을 받아옵니다.
 그 안에는 `contextJSON`(= GraphQL 원본 데이터)이 그대로 들어 있어서 캐러셀 전체와 고해상도 이미지(1238~1440px)를 얻습니다.
-느리니(10~30초) 직접 요청이 실패했을 때만 씁니다. 호출이 잦아 한도에 걸리면 `JINA_API_KEY` 를 넣으세요.
+느리니(10~30초) 직접 요청이 실패했을 때만 씁니다.
+⚠️ 키 없이 쓰면 **다른 사용자의 남용 때문에 도메인 단위로 몇 시간씩 막힐 수 있습니다**(403 `AbuseAlleviationError`).
+그때는 `JINA_API_KEY` 를 넣으면 익명이 아니게 되어 풀립니다.
 
 ## 글 스타일 (레퍼런스 분석 결과)
 
