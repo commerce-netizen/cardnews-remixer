@@ -356,23 +356,26 @@ export default function TemplateManager({ onClose, onPick }: Props) {
         </section>
 
         <section className="card stack">
+          <h2 style={{ margin: 0 }}>고정 댓글</h2>
+          <p className="muted small" style={{ margin: 0 }}>
+            게시물에 올리고 맨 위에 고정해 둘 댓글이에요. 적어 둔 그대로 나와요.
+          </p>
+          <textarea
+            id="pinned-comment"
+            rows={4}
+            value={draft.pinnedComment}
+            onChange={(e) => setDraft({ ...draft, pinnedComment: e.target.value })}
+            aria-label="고정 댓글"
+          />
+        </section>
+
+        <section className="card stack">
           <h2 style={{ margin: 0 }}>자동 DM (댓글 단 사람에게 보내는 글)</h2>
           <p className="muted small" style={{ margin: 0 }}>
-            <b>맨 윗줄</b>과 <b>맨 아랫줄(버튼 안내)</b>만 정하면 돼요.
-            가운데 레시피는 AI가 사진을 보고 써 주고, <b>비밀재료는 이름을 밝히지 않아요.</b>
+            <b>맨 아랫줄(버튼 안내)</b>만 정하면 돼요. 첫 줄 <b>&quot;댓글로 요청하신 레시피 드립니다!&quot;</b>는 항상 들어가고,
+            가운데 레시피는 AI가 사진을 보고 써 줘요. <b>비밀재료는 이름을 밝히지 않아요.</b>
           </p>
 
-          <div>
-            <label className="field-label" htmlFor="dm-intro">맨 윗줄</label>
-            <input
-              id="dm-intro"
-              type="text"
-              value={draft.dm.intro}
-              onChange={(e) => patchDm({ intro: e.target.value })}
-              placeholder="예) 비밀재료는 딱 1개야. 댓글로 요청하신 레시피 드립니다!"
-              autoComplete="off"
-            />
-          </div>
           <div>
             <label className="field-label" htmlFor="dm-cta">맨 아랫줄 (버튼 안내)</label>
             <textarea

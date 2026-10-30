@@ -36,6 +36,8 @@ export default function Editor({ slides, captionBody, dmContent, onChangeSlides,
   const [caption, setCaption] = useState("");
   const [dm, setDm] = useState("");
   const [dmCopied, setDmCopied] = useState(false);
+  const [pinned, setPinned] = useState("");
+  const [pinnedCopied, setPinnedCopied] = useState(false);
   const [watermark, setWatermark] = useState(DEFAULT_TEMPLATE.watermark.text);
   const [templates, setTemplates] = useState<Template[]>(BUILTIN_TEMPLATES);
   const [templateId, setTemplateId] = useState(DEFAULT_TEMPLATE.id);
@@ -72,10 +74,15 @@ export default function Editor({ slides, captionBody, dmContent, onChangeSlides,
     setResults(null);
   }, [captionBody, template]);
 
-  // 자동 DM = 템플릿의 인트로 + AI 레시피 + 버튼 안내 + 고지
+  // 자동 DM = 고정 인트로 + AI 레시피 + 버튼 안내 + 고지
   useEffect(() => {
     setDm(buildDm(dmContent, template));
   }, [dmContent, template]);
+
+  // 고정 댓글은 템플릿에 적어 둔 문구 그대로
+  useEffect(() => {
+    setPinned(template.pinnedComment);
+  }, [template]);
 
   /** 템플릿을 바꾸면 워터마크 문구도 그 템플릿에 저장된 문구로 맞춘다 */
   function applyTemplate(id: string, list: Template[] = templates) {
@@ -150,6 +157,7 @@ export default function Editor({ slides, captionBody, dmContent, onChangeSlides,
   };
   const copyCaption = () => copyText(caption, setCopied, "캡션");
   const copyDm = () => copyText(dm, setDmCopied, "DM");
+  const copyPinned = () => copyText(pinned, setPinnedCopied, "고정 댓글");
 
   const approve = async () => {
     setError(null);
@@ -161,7 +169,7 @@ export default function Editor({ slides, captionBody, dmContent, onChangeSlides,
       const blobs = await renderSlides(els, (d) => setBusy(`완성본 만드는 중… (${d} / ${slides.length}장)`));
       resultBlobs.current = blobs;
       setResults(blobs.map((b) => URL.createObjectURL(b)));
-      await downloadZip(blobs, caption, dm);
+      await downloadZip(blobs, caption, pinned, dm);
     } catch (e) {
       console.error(e);
       setError("완성본을 만들다 문제가 생겼어요. 사진을 바꾸거나 다시 눌러 주세요.");
@@ -315,9 +323,25 @@ export default function Editor({ slides, captionBody, dmContent, onChangeSlides,
         </button>
       </section>
 
+      <section className="card">
+        <h2>⑤ 고정 댓글</h2>
+        <p className="muted small" style={{ margin: "0 0 14px" }}>
+          게시물 올린 뒤 <b>맨 위에 고정</b>해 둘 댓글이에요. 문구는 <b>템플릿</b>에서 바꿀 수 있어요.
+        </p>
+        <textarea
+          rows={5}
+          value={pinned}
+          onChange={(e) => { setPinned(e.target.value); setResults(null); }}
+          aria-label="고정 댓글"
+        />
+        <button className="btn btn-secondary btn-block" style={{ marginTop: 16 }} onClick={copyPinned}>
+          {pinnedCopied ? "✓ 복사됐어요" : "📋 고정 댓글 복사하기"}
+        </button>
+      </section>
+
       {dm && (
         <section className="card">
-          <h2>⑤ 자동 DM (댓글 단 사람에게 보낼 글)</h2>
+          <h2>⑥ 자동 DM (댓글 단 사람에게 보낼 글)</h2>
           <p className="muted small" style={{ margin: "0 0 14px" }}>
             맨 윗줄·맨 아랫줄은 <b>템플릿</b>에서 바꿔요. <b>비밀재료가 뭔지는 일부러 안 적혀 있어요</b> —
             그걸 알려면 링크를 눌러야 하니까요.
@@ -333,7 +357,7 @@ export default function Editor({ slides, captionBody, dmContent, onChangeSlides,
         <section className="card" style={{ borderColor: "var(--ok)" }}>
           <h2>완성! 🎉</h2>
           <p>
-            컴퓨터에는 <b>압축 파일(zip)</b>로 저장됐어요. 사진과 함께 <b>캡션·자동 DM 글</b>도 들어 있어요. 휴대폰에서는 아래 사진을 <b>길게 눌러 저장</b>하거나 저장 버튼을 누르세요.
+            컴퓨터에는 <b>압축 파일(zip)</b>로 저장됐어요. 사진과 함께 <b>캡션·고정 댓글·자동 DM 글</b>도 들어 있어요. 휴대폰에서는 아래 사진을 <b>길게 눌러 저장</b>하거나 저장 버튼을 누르세요.
           </p>
           <div className="thumbs">
             {results.map((u, i) => (

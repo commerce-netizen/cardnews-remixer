@@ -25,10 +25,16 @@ export async function renderSlides(
   return blobs;
 }
 
-export async function downloadZip(blobs: Blob[], caption: string, dm: string): Promise<void> {
+export async function downloadZip(
+  blobs: Blob[],
+  caption: string,
+  pinnedComment: string,
+  dm: string,
+): Promise<void> {
   const zip = new JSZip();
   blobs.forEach((b, i) => zip.file(`slide_${String(i + 1).padStart(2, "0")}.png`, b));
   zip.file("caption.txt", caption);
+  if (pinnedComment.trim()) zip.file("pinned_comment.txt", pinnedComment);
   if (dm.trim()) zip.file("dm.txt", dm);
   const file = await zip.generateAsync({ type: "blob" });
   const stamp = new Date().toISOString().slice(0, 10);

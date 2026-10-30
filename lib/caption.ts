@@ -7,6 +7,13 @@ export const DISCLOSURE =
 export const DEFAULT_TOP_CTA = "🤤 댓글에 '나도' 남겨주세요!";
 export const DEFAULT_BOTTOM_CTA = "💬 레시피 궁금하면 댓글 남겨주세요! 👉";
 
+/** 고정 댓글(게시물에 고정해 두는 댓글) 기본 문구 */
+export const DEFAULT_PINNED_COMMENT = [
+  "💬 레시피 궁금하면 댓글에 '나도' 남겨주세요!",
+  "👉 프로필 링크 들어가서 <0 or 재료> 검색해도 확인 가능해요!",
+  "🙏 DM 못 받으신 분들은 새 댓글 남겨주세요",
+].join("\n");
+
 /**
  * 인스타 캡션 조립.
  *   [맨 윗줄 CTA]        ← 템플릿에서 사용자가 정함

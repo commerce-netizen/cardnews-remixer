@@ -121,10 +121,14 @@ const BASE = `http://127.0.0.1:${PORT}`;
 
     // 자동 DM: 템플릿 인트로 + AI 레시피 + 버튼 안내
     const dmBox = await page.inputValue('textarea[aria-label="자동 DM"]');
-    assert.ok(dmBox.startsWith("비밀재료는 딱 1개야."), "맨 윗줄 = 템플릿 인트로");
+    assert.ok(dmBox.startsWith("댓글로 요청하신 레시피 드립니다!"), "DM 첫 줄은 고정 문구");
+    assert.ok(!/딱 1개야/.test(dmBox), "반말 인트로는 빠졌다");
+    assert.match(dmBox, /<0 or 재료> 검색해주세요/, "버튼 안내 기본값");
+    const pinBox = await page.inputValue('textarea[aria-label="고정 댓글"]');
+    assert.match(pinBox, /🙏 DM 못 받으신 분들은 새 댓글 남겨주세요/, "고정 댓글 기본 문구");
     assert.ok(dmBox.trimEnd().endsWith("수수료를 제공받습니다.*"), "맨 끝 = 쿠팡 고지");
     assert.equal((dmBox.match(/✨/g) || []).length, 1, "비밀재료는 딱 한 줄");
-    console.log("✓ 자동 DM 문구 생성 (비밀재료 1줄, 정체 비공개)");
+    console.log("✓ 고정 댓글 + 자동 DM 문구 생성 (비밀재료 1줄, 정체 비공개)");
 
     const download = page.waitForEvent("download");
     await page.click("text=승인하고 내려받기");
@@ -135,7 +139,10 @@ const BASE = `http://127.0.0.1:${PORT}`;
     const JSZip = require("jszip");
     const zip = await JSZip.loadAsync(fs.readFileSync(zipPath));
     const names = Object.keys(zip.files).sort();
-    assert.deepEqual(names, ["caption.txt", "dm.txt", "slide_01.png", "slide_02.png", "slide_03.png"]);
+    assert.deepEqual(names, ["caption.txt", "dm.txt", "pinned_comment.txt", "slide_01.png", "slide_02.png", "slide_03.png"]);
+    const pin = await zip.file("pinned_comment.txt").async("string");
+    assert.match(pin, /레시피 궁금하면 댓글에 '나도' 남겨주세요/);
+    assert.match(pin, /<0 or 재료>/, "프로필 검색 키워드 자리");
     const dmTxt = await zip.file("dm.txt").async("string");
     assert.match(dmTxt, /✨ 비밀재료/, "비밀재료 줄");
     assert.ok(!/비밀재료는 .*입니다|비밀재료 ?= ?/.test(dmTxt), "비밀재료의 정체는 안 적힌다");
@@ -147,7 +154,7 @@ const BASE = `http://127.0.0.1:${PORT}`;
     assert.equal(png.readUInt32BE(20), 1350);
     assert.match(await zip.file("caption.txt").async("string"), /쿠팡 파트너스/);
     await page.waitForSelector("text=완성!");
-    console.log("✓ 승인 → zip(1080×1350 PNG 3장 + 캡션 + 자동 DM) 다운로드");
+    console.log("✓ 승인 → zip(PNG 3장 + 캡션 + 고정 댓글 + 자동 DM) 다운로드");
   } finally {
     await browser.close();
     try { process.kill(-app.pid); } catch {}
