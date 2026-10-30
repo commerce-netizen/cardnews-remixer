@@ -51,6 +51,33 @@ const scenarios = {
   blocked: () => err(400, "image_generation_user_error", "moderation_blocked", "Your request was rejected by the safety system."),
 };
 
+// 사진 분석(비전) 응답 — 사진 바이트 안의 CASE 표시로 시나리오를 고르고, 생성 단계 시나리오는 설명문에 실어 넘긴다
+function analysisFor(c) {
+  if (c === "quota") return scenarios.quota();
+  if (c === "analysisbroken") {
+    return [200, response([reasoning, msg([{ type: "output_text", text: '{"is_food":tr', annotations: [], logprobs: [] }])],
+      { status: "incomplete", incomplete_details: { reason: "max_output_tokens" } })];
+  }
+  const next = { genquota: "quota", blocked: "blocked" }[c] ?? "image";
+  const analysis = {
+    is_food: true,
+    dish_name_ko: "즉석 떡볶이",
+    dish_name_en: "Korean instant tteokbokki",
+    dish_description_en: `rice cakes, fish cakes, ramen noodles and glass noodles in bubbling red gochujang sauce in a black pan. CASE:${next}`,
+    key_ingredients_en: ["rice cakes", "fish cakes", "ramen noodles", "green onion"],
+    is_hot_dish: true,
+    original_angle: "top-down",
+    original_composition_en: "whole round pan centered, noodles in the middle",
+    original_background_en: "dark gas stove on a wooden table",
+    alternative_plating_en: "an individual shallow bowl portion with a boiled egg on top",
+  };
+  return [200, response([reasoning, msg([{ type: "output_text", text: JSON.stringify(analysis), annotations: [], logprobs: [] }])])];
+}
+const caseInImage = (json) => {
+  const url = json.input?.[0]?.content?.find((c) => c.type === "input_image")?.image_url ?? "";
+  return Buffer.from(url.split(",")[1] ?? "", "base64").toString("latin1").match(/CASE:(\w+)/)?.[1] ?? "image";
+};
+
 const requests = [];
 const fake = http.createServer((req, res) => {
   let body = "";
@@ -60,10 +87,12 @@ const fake = http.createServer((req, res) => {
     let parsed;
     try { parsed = JSON.parse(body || "{}"); } catch { parsed = body; }
     requests.push({ path: req.url, body: parsed, contentType: req.headers["content-type"] ?? "" });
-    const name = req.url.includes("/images/")
-      ? (body.match(/CASE:(\w+)/)?.[1] ?? "image")
-      : (body.match(/CASE:(\w+)/)?.[1] ?? "ok");
-    const [status, json] = scenarios[name]();
+    const marker = body.match(/CASE:(\w+)/)?.[1];
+    const [status, json] = req.url.includes("/images/")
+      ? scenarios[["quota", "blocked"].includes(marker) ? marker : "image"]()
+      : parsed?.text?.format?.name === "food_photo_analysis"
+        ? analysisFor(caseInImage(parsed))
+        : scenarios[marker ?? "ok"]();
     res.writeHead(status, { "content-type": "application/json", "retry-after": "0", "x-should-retry": "false" });
     res.end(JSON.stringify(json));
   });
@@ -132,25 +161,48 @@ try {
     ["401 잘못된 키", () => remix("CASE:badkey"), (r) => { assert.equal(r.status, 502); assert.match(r.json.error, /키가 올바르지/); }],
     ["404 모델 없음(지원 종료 등)", () => remix("CASE:nomodel"), (r) => { assert.equal(r.status, 502); assert.match(r.json.error, /모델/); }],
     ["입력 없음", () => remix(""), (r) => { assert.equal(r.status, 502); assert.match(r.json.error, /필요해요/); }],
-    ["AI 새 사진: 원본 사진 편집 요청", () => post("/api/image-gen", { image: photo("image"), title: "제목" }), (r) => {
+    ["AI 새 사진: 원본 분석 → 같은 요리를 새 구도로 생성", () => post("/api/image-gen", { image: photo("image"), title: "제목" }), (r) => {
       assert.equal(r.status, 200);
       assert.match(r.json.image, /^data:image\/jpeg;base64,/);
-      const { path, body, contentType } = last();
-      assert.equal(path, "/v1/images/edits");
-      assert.match(contentType, /^multipart\/form-data/);
-      const field = (name) => body.match(new RegExp(`name="${name}"\\r\\n\\r\\n([\\s\\S]*?)\\r\\n--`))?.[1];
-      assert.equal(field("model"), "gpt-image-2.5-sunburst");
-      assert.equal(field("size"), "1088x1360"); // 정확히 4:5
-      assert.equal(field("quality"), "low");
-      assert.equal(field("n"), "1");
-      assert.match(body, /name="image"; filename="slide\.jpeg"/);
-      assert.ok(body.includes("CASE:image"), "원본 사진 바이트가 그대로 전송돼야 함");
-      const prompt = field("prompt");
-      assert.match(prompt, /same food/i);
-      assert.match(prompt, /composition, arrangement of the food, camera angle and plating/);
-      assert.match(prompt, /REMOVE ALL TEXT/);
+      const [analyzeReq, genReq] = requests.slice(-2);
+      // 1단계: 비전 분석 (원본 사진 그대로 전달, 글자·오버레이는 무시하라는 지시)
+      assert.equal(analyzeReq.path, "/v1/responses");
+      assert.equal(analyzeReq.body.model, "gpt-5-mini");
+      assert.equal(analyzeReq.body.input[0].content[0].image_url, photo("image"));
+      assert.match(analyzeReq.body.instructions, /ignore anything overlaid/i);
+      // 2단계: 새로 생성 (원본 사진은 넣지 않음 → 박스·글자가 옮겨 올 길 없음)
+      assert.equal(genReq.path, "/v1/images/generations");
+      const { model, size, quality, prompt } = genReq.body;
+      assert.equal(model, "gpt-image-2.5-sunburst");
+      assert.equal(size, "1088x1360");
+      assert.equal(quality, "low");
+      assert.ok(!JSON.stringify(genReq.body).includes("data:image"), "생성 요청엔 원본 사진이 없어야 함");
+      // (1) 같은 요리·재료 유지 + 구도·배치·앵글·배경은 원본과 다르게
+      assert.match(prompt, /Korean instant tteokbokki \(즉석 떡볶이\)/);
+      assert.match(prompt, /rice cakes, fish cakes, ramen noodles, green onion/);
+      assert.match(prompt, /The reference was top-down — do NOT use that angle/);
+      assert.ok(!/Camera angle: straight top-down/.test(prompt), "원본과 같은 앵글을 고르면 안 됨");
+      assert.match(prompt, /individual shallow bowl portion.*do NOT copy it/);
+      assert.match(prompt, /dark gas stove on a wooden table — do NOT reuse it/);
+      // (2) 더 맛있어 보이게
+      assert.match(prompt, /professional food photography/i);
+      assert.match(prompt, /steam/);
+      assert.match(prompt, /glossy/);
+      assert.match(prompt, /vivid/);
+      // (3) 글자·그래픽 오버레이 전부 제거
+      assert.match(prompt, /semi-transparent text box/);
+      assert.match(prompt, /gradient band at the bottom/);
       assert.match(prompt, /\[광고\]/);
-      assert.match(prompt, /워터마크·\[광고\] 라벨을 완전히 제거하고, 글자가 하나도 없는 깨끗한 음식 사진/);
+      assert.match(prompt, /하단 그라데이션·반투명 텍스트박스를 완전히 제거/);
+    }],
+    ["AI 새 사진: 분석 실패 시 편집 방식으로 대체", () => post("/api/image-gen", { image: photo("analysisbroken") }), (r) => {
+      assert.equal(r.status, 200);
+      const { path, body } = last();
+      assert.equal(path, "/v1/images/edits");
+      assert.ok(body.includes("CASE:analysisbroken"), "원본 사진이 편집 요청에 들어가야 함");
+      assert.match(body, /name="size"\r\n\r\n1088x1360/);
+      assert.match(body, /different camera angle, a different arrangement\/plating, and a completely different background/);
+      assert.match(body, /gradient band at the bottom/);
     }],
     ["AI 새 사진: 사진 없는 장은 글로 생성", () => post("/api/image-gen", { title: "휴대용 선풍기" }), (r) => {
       assert.equal(r.status, 200);
@@ -158,9 +210,10 @@ try {
       assert.equal(path, "/v1/images/generations");
       assert.equal(body.model, "gpt-image-2.5-sunburst");
       assert.equal(body.size, "1088x1360");
-      assert.match(body.prompt, /REMOVE ALL TEXT/);
+      assert.match(body.prompt, /ABSOLUTELY NO TEXT OR GRAPHIC OVERLAYS/);
     }],
-    ["AI 새 사진: 한도 소진", () => post("/api/image-gen", { image: photo("quota") }), (r) => { assert.equal(r.status, 502); assert.match(r.json.error, /사용 한도/); }],
+    ["AI 새 사진: 분석 단계 한도 소진", () => post("/api/image-gen", { image: photo("quota") }), (r) => { assert.equal(r.status, 502); assert.match(r.json.error, /사용 한도/); assert.equal(last().path, "/v1/responses"); }],
+    ["AI 새 사진: 생성 단계 한도 소진", () => post("/api/image-gen", { image: photo("genquota") }), (r) => { assert.equal(r.status, 502); assert.match(r.json.error, /사용 한도/); assert.equal(last().path, "/v1/images/generations"); }],
     ["AI 새 사진: 안전 기준 차단", () => post("/api/image-gen", { image: photo("blocked") }), (r) => { assert.equal(r.status, 502); assert.match(r.json.error, /안전 기준/); }],
     ["AI 새 사진: 잘못된 사진 형식", () => post("/api/image-gen", { image: "data:text/plain;base64,aGk=" }), (r) => { assert.equal(r.status, 502); assert.match(r.json.error, /사진 형식/); }],
     ["AI 새 사진: 사진도 글도 없음", () => post("/api/image-gen", {}), (r) => { assert.equal(r.status, 502); assert.match(r.json.error, /사진을 넣거나 글을/); }],

@@ -164,7 +164,7 @@ export default function Editor({ slides, caption, onChangeSlides, onChangeCaptio
                   genIndex === i && (
                     <div className="preview-overlay" role="status">
                       <div className="spinner" />
-                      <p>AI가 새 사진을 만드는 중이에요<br />최대 1분쯤 걸려요</p>
+                      <p>AI가 새 사진을 만드는 중이에요<br />1~2분쯤 걸려요</p>
                     </div>
                   )
                 }

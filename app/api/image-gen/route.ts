@@ -3,8 +3,8 @@ import { isImageGenEnabled, remakeSlideImage, type ImageGenRequest } from "@/lib
 import { friendlyError, hasApiKey, isMockMode } from "@/lib/openai";
 
 export const runtime = "nodejs";
-// 이미지 편집은 1분 이상 걸릴 수 있음 (OpenAI 타임아웃 150초 + 여유)
-export const maxDuration = 180;
+// 사진 분석 + 새 사진 생성으로 1~2분 걸릴 수 있음
+export const maxDuration = 240;
 
 export async function POST(req: Request) {
   if (!isImageGenEnabled()) {
