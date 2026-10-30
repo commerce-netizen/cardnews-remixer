@@ -46,12 +46,25 @@ const BASE = `http://127.0.0.1:${PORT}`;
     assert.ok(await page.isVisible("text=인스타그램 주소만"));
     console.log("✓ 추출 실패 시 수동 업로드 화면으로 이동");
 
+    assert.ok(await page.locator(".toggle input").first().isChecked(), "'사진도 AI로' 기본 켜짐");
     await page.setInputFiles("input[type=file]", files);
     await page.waitForSelector(".thumb >> nth=2");
     await page.click("button:has-text('카드뉴스 새로 만들기')");
-    await page.waitForSelector("text=각색이 끝났어요", { timeout: 30_000 });
+    await page.waitForSelector("text=각색이 끝났어요", { timeout: 60_000 });
     assert.equal(await page.locator(".preview-frame").count(), 3);
     console.log("✓ 사진 3장 → 슬라이드 3장 각색(데모)");
+
+    // 버튼을 하나도 안 눌렀는데 사진까지 이미 AI로 바뀌어 있어야 한다 (글·사진 동시 생성)
+    const autoShots = await page.evaluate(() =>
+      [...document.querySelectorAll(".preview-frame img")].map((im) => [im.src.slice(0, 16), im.naturalWidth, im.naturalHeight]),
+    );
+    assert.equal(autoShots.length, 3);
+    for (const [head, w, h] of autoShots) {
+      assert.equal(head, "data:image/jpeg;", "자동 생성된 AI 사진");
+      assert.deepEqual([w, h], [1080, 1350]);
+    }
+    assert.ok(await page.locator("button:has-text('이전 사진으로')").first().isVisible(), "원래 사진으로 되돌릴 수 있다");
+    console.log("✓ 버튼 없이 글·사진이 한 번에 완성 (3장 모두 1080×1350 AI 사진)");
 
     // 장마다 카드: 1번 장=표지 제목, 2번 장부터=본문
     assert.ok(await page.isVisible("text=1번 장 · 표지"));

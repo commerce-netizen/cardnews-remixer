@@ -1,6 +1,8 @@
 export type Slide = {
   /** 화면에 표시할 이미지 주소 (프록시 URL 또는 data URL). 없으면 글자만 있는 슬라이드 */
   image: string | null;
+  /** 각색 전 원본 사진 — AI 사진으로 자동 교체됐을 때 되돌리기용 */
+  sourceImage?: string | null;
   /** 원본 슬라이드에서 읽어낸 글 (참고용) */
   original: string;
   title: string;

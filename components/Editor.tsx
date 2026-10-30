@@ -3,7 +3,8 @@
 import { useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from "react";
 import { SLIDE_H, SLIDE_W, SlidePreview } from "./SlideCard";
 import TemplateManager from "./TemplateManager";
-import { coverCrop, resizeImage } from "@/lib/client-images";
+import { resizeImage } from "@/lib/client-images";
+import { IMAGE_GEN_ENABLED, makeAiPhoto } from "@/lib/slide-image";
 import { downloadZip, renderSlides, triggerDownload } from "@/lib/export";
 import { buildCaption } from "@/lib/caption";
 import { loadFonts } from "@/lib/webfonts";
@@ -18,9 +19,6 @@ import {
   type Template,
 } from "@/lib/templates";
 import type { Slide } from "@/lib/types";
-
-// 'AI 새 사진' 기능 스위치 (빌드 시 값이 들어감). 기본 켜짐, "0"이면 끔
-const IMAGE_GEN_ENABLED = process.env.NEXT_PUBLIC_ENABLE_IMAGE_GEN !== "0";
 
 type Props = {
   slides: Slide[];
@@ -110,16 +108,7 @@ export default function Editor({ slides, captionBody, onChangeSlides, onRemixAga
     setGenIndex(i);
     const current = slides[i].image;
     try {
-      // 지금 사진(인스타 원본·업로드·이전 AI 사진)을 적당한 크기의 JPEG로 바꿔 보냄
-      const source = current ? await resizeImage(current, 1536, 0.85) : null;
-      const res = await fetch("/api/image-gen", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ image: source, title: slides[i].title, body: slides[i].body }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok || !data.image) throw new Error(data.error || "새 사진을 만들지 못했어요. 다시 한 번 눌러 주세요.");
-      const image = await coverCrop(data.image, SLIDE_W, SLIDE_H);
+      const image = await makeAiPhoto(current, slides[i].title, slides[i].body, SLIDE_W, SLIDE_H);
       setPrevImages((p) => ({ ...p, [i]: current }));
       update(i, { image });
     } catch (e) {
@@ -130,8 +119,12 @@ export default function Editor({ slides, captionBody, onChangeSlides, onRemixAga
     }
   };
 
+  /** 되돌릴 사진: 직전 사진이 없으면 각색 전 원본 사진 */
+  const undoTarget = (i: number) => (i in prevImages ? prevImages[i] : (slides[i].sourceImage ?? null));
+  const canUndo = (i: number) => i in prevImages || !!(slides[i].sourceImage && slides[i].sourceImage !== slides[i].image);
+
   const undoImage = (i: number) => {
-    update(i, { image: prevImages[i] ?? null });
+    update(i, { image: undoTarget(i) });
     forgetPrev(i);
   };
 
@@ -261,7 +254,7 @@ export default function Editor({ slides, captionBody, onChangeSlides, onRemixAga
                       {genIndex === i ? "새 사진 만드는 중…" : "✨ AI 새 사진"}
                     </button>
                   )}
-                  {i in prevImages && genIndex !== i && (
+                  {canUndo(i) && genIndex !== i && (
                     <button className="btn btn-secondary" onClick={() => undoImage(i)} disabled={!!busy}>
                       ↩ 이전 사진으로
                     </button>

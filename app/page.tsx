@@ -1,9 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Editor from "@/components/Editor";
 import { prepareImages, type PreparedImage } from "@/lib/client-images";
+import { SLIDE_H, SLIDE_W } from "@/components/SlideCard";
+import { IMAGE_GEN_ENABLED, loadAutoImages, makeAiPhoto, saveAutoImages } from "@/lib/slide-image";
 import type { ExtractResult, RemixRequest, RemixResult, Slide } from "@/lib/types";
 
 type Step = "home" | "manual" | "loading" | "edit";
@@ -30,6 +32,17 @@ export default function Home() {
   const [loadingMsg, setLoadingMsg] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
+  // 사진까지 AI로 새로 만들지 (기본 켜짐, 이 브라우저에 기억)
+  const [autoImages, setAutoImages] = useState(true);
+
+  useEffect(() => {
+    setAutoImages(loadAutoImages());
+  }, []);
+
+  const changeAutoImages = (on: boolean) => {
+    setAutoImages(on);
+    saveAutoImages(on);
+  };
 
   // 수동 입력
   const [uploads, setUploads] = useState<PreparedImage[]>([]);
@@ -42,20 +55,55 @@ export default function Home() {
   // AI가 각색한 캡션 본문 (CTA·고지 문구는 Editor가 템플릿대로 붙인다)
   const [caption, setCaption] = useState("");
 
-  const runRemix = async (src: Source, back: Step) => {
+  /**
+   * 글 각색과 AI 새 사진을 **동시에** 돌린다.
+   * 사진 편집은 원본 사진만 있으면 되므로 각색 결과를 기다릴 필요가 없다 —
+   * 그래서 전체 시간이 '둘 중 느린 쪽' 하나로 끝난다.
+   */
+  const runRemix = async (src: Source, back: Step, withImages = autoImages) => {
     setError(null);
     setStep("loading");
-    setLoadingMsg("AI가 글을 새로 쓰고 있어요…\n30초~1분 정도 걸려요. 화면을 닫지 마세요.");
+    const photos = withImages && IMAGE_GEN_ENABLED ? src.images.filter(Boolean).length : 0;
+    setLoadingMsg(
+      photos
+        ? `AI가 글을 새로 쓰고, 사진 ${photos}장도 같이 만들고 있어요…\n1~2분 정도 걸려요. 화면을 닫지 마세요.`
+        : "AI가 글을 새로 쓰고 있어요…\n30초~1분 정도 걸려요. 화면을 닫지 마세요.",
+    );
+
+    let done = 0;
+    const failed: number[] = [];
+    const makePhoto = (img: string | null, i: number) =>
+      makeAiPhoto(img, "", "", SLIDE_W, SLIDE_H)
+        .catch(() => {
+          failed.push(i + 1);
+          return null; // 실패한 장은 원본 사진을 그대로 쓴다
+        })
+        .then((v) => {
+          done += 1;
+          setLoadingMsg(
+            `AI가 글을 새로 쓰고, 사진도 같이 만들고 있어요…\n사진 ${done} / ${photos}장 완성`,
+          );
+          return v;
+        });
+
     try {
-      const r = await postJson<RemixResult>("/api/remix", src.request);
+      const [r, aiImages] = await Promise.all([
+        postJson<RemixResult>("/api/remix", src.request),
+        photos
+          ? Promise.all(src.images.map((img, i) => (img ? makePhoto(img, i) : Promise.resolve(null))))
+          : Promise.resolve([] as (string | null)[]),
+      ]);
+
       const n = Math.max(r.slides.length, src.images.length);
       setSlides(
         Array.from({ length: n }, (_, i) => {
           const title = r.slides[i]?.title?.trim() ?? "";
           const body = r.slides[i]?.body?.trim() ?? "";
+          const origin = src.images[i] ?? null;
           // 디자인 틀: 1번 장은 제목만, 2번 장부터는 본문만 보인다. AI가 칸을 잘못 채워도 글이 사라지지 않게 합친다.
           return {
-            image: src.images[i] ?? null,
+            image: aiImages[i] ?? origin,
+            sourceImage: origin,
             original: r.slides[i]?.original ?? "",
             title: i === 0 ? title || body : title,
             body: i === 0 ? body : body || title,
@@ -64,6 +112,11 @@ export default function Home() {
       );
       setCaption(r.caption);
       setSource(src);
+      setInfo(
+        failed.length
+          ? `${failed.join("·")}번 장은 새 사진을 못 만들어서 원래 사진을 그대로 뒀어요. 그 장의 ✨ AI 새 사진을 다시 눌러 보세요.`
+          : null,
+      );
       setStep("edit");
       window.scrollTo(0, 0);
     } catch (e) {
@@ -176,6 +229,15 @@ export default function Home() {
             <button className="btn btn-primary btn-huge" onClick={startFromUrl}>
               카드뉴스 새로 만들기 ▶
             </button>
+            {IMAGE_GEN_ENABLED && (
+              <label className="toggle">
+                <input type="checkbox" checked={autoImages} onChange={(e) => changeAutoImages(e.target.checked)} />
+                <span>
+                  <b>사진도 AI로 새로 만들기</b>
+                  <span className="muted small"> — 글과 <b>동시에</b> 만들어 한 번에 완성돼요 (사진 수만큼 비용이 들어요)</span>
+                </span>
+              </label>
+            )}
             <p className="muted small" style={{ margin: 0 }}>
               주소 얻는 법: 인스타그램 게시물 오른쪽 위 ⋯ (또는 종이비행기) → <b>링크 복사</b>
             </p>
@@ -236,6 +298,18 @@ export default function Home() {
             />
           </section>
 
+          {IMAGE_GEN_ENABLED && (
+            <section className="card">
+              <label className="toggle">
+                <input type="checkbox" checked={autoImages} onChange={(e) => changeAutoImages(e.target.checked)} />
+                <span>
+                  <b>사진도 AI로 새로 만들기</b>
+                  <span className="muted small"> — 글과 동시에 만들어 한 번에 완성돼요</span>
+                </span>
+              </label>
+            </section>
+          )}
+
           <button className="btn btn-primary btn-huge" onClick={startManual}>
             카드뉴스 새로 만들기 ▶
           </button>
@@ -246,13 +320,14 @@ export default function Home() {
       )}
 
       {step === "edit" && error && <div className="notice notice-error" role="alert">{error}</div>}
+      {step === "edit" && info && <div className="notice notice-info">{info}</div>}
       {step === "edit" && source && (
         <Editor
           slides={slides}
           captionBody={caption}
           onChangeSlides={setSlides}
           // 다시 각색해도 사용자가 바꾼 사진은 유지
-          onRemixAgain={() => runRemix({ ...source, images: slides.map((s) => s.image) }, "edit")}
+          onRemixAgain={() => runRemix({ ...source, images: slides.map((s) => s.image) }, "edit", false)}
           onRestart={restart}
         />
       )}
