@@ -153,6 +153,14 @@ try {
     assert.match(prompt, /하단 그라데이션·반투명 텍스트박스를 완전히 제거/);
   };
 
+  /** 바꾸는 축 다섯 가지가 모두 지시돼야 한다 (하나만 바꾸면 원본과 너무 비슷해짐) */
+  const checkAllAxes = (prompt) => {
+    for (const axis of [/- Camera angle: /, /- Distance \/ crop: /, /- Position in frame: /, /- Arrangement of the food: /, /- Background \/ table: /]) {
+      assert.match(prompt, axis);
+    }
+    assert.match(prompt, /rearrange where each ingredient sits|rotate the whole dish|pile the ingredients less neatly|spread the ingredients out differently/);
+  };
+
   const cases = [
     ["각색 정상 → 슬라이드 + 캡션 본문(CTA·고지는 화면에서 붙임)", () => remix("CASE:ok"), (r) => {
       assert.equal(r.status, 200);
@@ -196,7 +204,7 @@ try {
     ["401 잘못된 키", () => remix("CASE:badkey"), (r) => { assert.equal(r.status, 502); assert.match(r.json.error, /키가 올바르지/); }],
     ["404 모델 없음(지원 종료 등)", () => remix("CASE:nomodel"), (r) => { assert.equal(r.status, 502); assert.match(r.json.error, /모델/); }],
     ["입력 없음", () => remix(""), (r) => { assert.equal(r.status, 502); assert.match(r.json.error, /필요해요/); }],
-    ["AI 새 사진(기본=편집): 원본 사진으로 구도·배경만 바꾸고 사실적으로", () => post("/api/image-gen", { image: photo("image"), title: "제목" }), (r) => {
+    ["AI 새 사진(기본=편집): 같은 요리·사실적 질감 유지 + 구도는 한눈에 다르게", () => post("/api/image-gen", { image: photo("image"), title: "제목" }), (r) => {
       assert.equal(r.status, 200);
       assert.match(r.json.image, /^data:image\/jpeg;base64,/);
       const { path, body, contentType } = last();
@@ -209,10 +217,12 @@ try {
       assert.ok(body.includes("CASE:image"), "원본 사진 바이트가 그대로 전송돼야 함");
       const prompt = field("prompt");
       checkRealisticPrompt(prompt);
-      // (3) 같은 요리·재료·사진 느낌 유지, 구도·배경·배치만 변경
-      assert.match(prompt, /KEEP: the same dish, the same ingredients/);
-      assert.match(prompt, /CHANGE ONLY the composition, the background and the placement/);
-      assert.match(prompt, /구도·배경·배치\(음식 위치\/앵글\)만 바꿔라/);
+      // (3) 같은 요리·재료·사진 느낌은 유지하되, 구도는 한눈에 다르게
+      assert.match(prompt, /KEEP: the same dish, the same ingredients and the same amounts/);
+      assert.match(prompt, /CLEARLY DIFFERENT from the input at first glance/);
+      assert.match(prompt, /Do not reproduce the input's framing, angle or layout/);
+      checkAllAxes(prompt);
+      assert.match(prompt, /앵글·거리·화면 속 위치·재료들의 배치·배경은 한눈에 다르게 바꿔라/);
     }],
     ["AI 새 사진(describe 방식 선택 시): 분석 → 사실적으로 다시 촬영", () => post("/api/image-gen", { image: photo("image") }, DESCRIBE_PORT), (r) => {
       assert.equal(r.status, 200);
@@ -225,8 +235,9 @@ try {
       assert.match(prompt, /Korean instant tteokbokki \(즉석 떡볶이\)/);
       assert.match(prompt, /rice cakes, fish cakes, ramen noodles, green onion/);
       assert.match(prompt, /Photo look to match \(keep it the same\): slightly warm indoor phone photo/);
-      assert.match(prompt, /The reference was top-down on dark gas stove on a wooden table — use a different angle and background/);
-      assert.ok(!/looking more straight down/.test(prompt), "원본과 같은 앵글을 고르면 안 됨");
+      assert.match(prompt, /The reference was top-down on dark gas stove on a wooden table — do not reuse that angle or background/);
+      checkAllAxes(prompt);
+      assert.ok(!/straight top-down \(90°\)/.test(prompt), "원본과 같은 앵글을 고르면 안 됨");
     }],
     ["AI 새 사진(describe): 분석 실패 시 편집으로 대체", () => post("/api/image-gen", { image: photo("analysisbroken") }, DESCRIBE_PORT), (r) => {
       assert.equal(r.status, 200);

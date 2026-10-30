@@ -49,13 +49,36 @@ const CLEAN_RULE = [
   "글자나 그래픽 오버레이가 하나도 없는 깨끗한 사진만 만들어라.",
 ].join("\n");
 
-/* 바꾸는 것은 구도·배경·배치뿐 — 평범하고 현실적인 변화 후보 중 무작위로 골라 누를 때마다 다른 사진 */
-const FRAMINGS = [
-  "shoot from a noticeably higher angle, looking more straight down at the dish",
-  "shoot from a lower, more side-on angle, closer to table height",
-  "frame it closer so the dish fills more of the frame, cropping part of the pan or plate",
-  "frame it wider so more of the table around the dish is visible",
-  "move the dish off-center to one side of the frame instead of the middle",
+/*
+ * 바꾸는 축을 넷으로 나눠 각각 따로 뽑는다 (앵글 / 거리·크롭 / 프레임 안 위치 / 재료 배치).
+ * 하나만 바꾸면 원본과 너무 비슷해 보여서, 매번 네 축을 모두 바꾸게 한다.
+ * 다만 바꾸는 방향은 '실제로 다시 찍은 것 같은' 평범한 선택지 안에서만 고른다.
+ */
+const ANGLES = {
+  "top-down": "straight top-down (90°), looking right down at the dish",
+  "45-degree": "a 45° three-quarter view, as a diner sitting at the table would shoot it",
+  "eye-level": "a low, almost table-height side view",
+  "close-up": "a tight close-up from slightly above, very near the food",
+} as const;
+type Angle = keyof typeof ANGLES;
+const ANGLE_KEYS = Object.keys(ANGLES) as Angle[];
+
+const DISTANCES = [
+  "much closer than the input — the food fills almost the whole frame and the rim of the pan/plate is cropped off",
+  "a little closer, cropping one edge of the pan/plate",
+  "further back, showing the whole dish plus a good amount of the table around it",
+];
+const FRAME_POSITIONS = [
+  "put the dish clearly off-center, toward the left of the frame",
+  "put the dish clearly off-center, toward the right of the frame",
+  "put the dish low in the frame with more empty table above it",
+  "put the dish high in the frame with more table below it",
+];
+const ARRANGEMENTS = [
+  "rearrange where each ingredient sits — the ones at the front move to the back and vice versa, and the groups are in a different order around the pan/plate",
+  "rotate the whole dish so a different ingredient faces the camera, and let the ingredients overlap each other differently",
+  "pile the ingredients less neatly — more mixed together and tumbled, the way it looks after being served and stirred",
+  "spread the ingredients out differently so a different part of the dish is the most visible",
 ];
 const SETTINGS = [
   "an ordinary Korean restaurant table with a couple of everyday side dishes and a water cup nearby",
@@ -64,27 +87,49 @@ const SETTINGS = [
   "a stainless steel table of a busy casual eatery",
   "a light-colored table by a window with ordinary daylight",
 ];
-const ANGLE_FRAMINGS = {
-  "top-down": FRAMINGS[0],
-  "45-degree": "a typical 45-degree view, as a diner sitting at the table would shoot it",
-  "eye-level": FRAMINGS[1],
-  "close-up": FRAMINGS[2],
-} as const;
-type Angle = keyof typeof ANGLE_FRAMINGS;
-const ANGLE_KEYS = Object.keys(ANGLE_FRAMINGS) as Angle[];
 
 const pick = <T,>(arr: readonly T[]) => arr[Math.floor(Math.random() * arr.length)];
 
-/** 편집 방식 프롬프트: 같은 요리·재료·사진 느낌, 구도·배경·배치만 변경 */
-function editPrompt(framing: string, setting: string) {
+type Variation = { angle: string; distance: string; framePos: string; arrangement: string; setting: string };
+
+/** 원본 앵글은 빼고 네 축을 각각 무작위로 — 누를 때마다 확실히 다른 사진 */
+function pickVariation(originalAngle?: Angle): Variation {
+  const keys = ANGLE_KEYS.filter((k) => k !== originalAngle);
+  return {
+    angle: ANGLES[pick(keys.length ? keys : ANGLE_KEYS)],
+    distance: pick(DISTANCES),
+    framePos: pick(FRAME_POSITIONS),
+    arrangement: pick(ARRANGEMENTS),
+    setting: pick(SETTINGS),
+  };
+}
+
+/** 네 축을 모두 바꾸라는 지시 (편집·생성 양쪽이 같이 쓴다) */
+function changeRules(v: Variation): string {
   return [
-    "Edit this photo into a different shot of the exact same food, as if the same person took another real photo of it.",
-    "KEEP: the same dish, the same ingredients and amounts, the same cookware/plate, and the same real photographic look (see PHOTOREALISM).",
-    "CHANGE ONLY the composition, the background and the placement:",
-    `- Composition / camera: ${framing}.`,
-    `- Background / table: ${setting}.`,
-    "- Placement: the dish may sit in a different position on the table.",
-    "같은 요리·같은 재료는 유지하고, 구도·배경·배치(음식 위치/앵글)만 바꿔라.",
+    `- Camera angle: ${v.angle}. This must be clearly different from the input's angle.`,
+    `- Distance / crop: ${v.distance}.`,
+    `- Position in frame: ${v.framePos}.`,
+    `- Arrangement of the food: ${v.arrangement}.`,
+    `- Background / table: ${v.setting}.`,
+  ].join("\n");
+}
+
+/** 편집 방식 프롬프트: 같은 요리·재료·사진 느낌은 유지하되 구도·배치는 확실히 다르게 */
+function editPrompt(v: Variation) {
+  return [
+    "Re-shoot this exact same food as a NEW photo taken at a different moment, from a different position.",
+    "The result must look CLEARLY DIFFERENT from the input at first glance — a genuinely different shot,",
+    "not the same shot with small edits. Do not reproduce the input's framing, angle or layout.",
+    "",
+    "KEEP: the same dish, the same ingredients and the same amounts, the same cookware/plate,",
+    "and the same real photographic look — lighting, color tone, sharpness, grain, mood (see PHOTOREALISM).",
+    "",
+    "CHANGE ALL OF THESE:",
+    changeRules(v),
+    "",
+    "같은 요리·같은 재료·같은 그릇·같은 사진 느낌은 그대로 두고,",
+    "앵글·거리·화면 속 위치·재료들의 배치·배경은 한눈에 다르게 바꿔라. 원본 구도를 따라 하지 마라.",
     "",
     REALISM_RULE,
     "",
@@ -140,15 +185,17 @@ async function analyze(client: OpenAI, image: string): Promise<Analysis | null> 
 }
 
 /** 분석 결과로 '같은 요리를 다시 찍은 사실적인 사진' 프롬프트 */
-function describedPrompt(a: Analysis, framing: string, setting: string) {
+function describedPrompt(a: Analysis, v: Variation) {
   return [
     "A realistic, unedited-looking photo of a real dish, vertical 4:5.",
     `Dish: ${a.dish_name_en} (${a.dish_name_ko}). ${a.dish_description_en}`,
     `Same ingredients, clearly visible: ${a.key_ingredients_en.join(", ")}. Do not add unrelated foods.`,
     `Photo look to match (keep it the same): ${a.photo_look_en}.`,
-    `Change only composition and background: ${framing}; on ${setting}.`,
-    `(The reference was ${a.original_angle} on ${a.original_background_en} — use a different angle and background.)`,
-    "같은 요리·같은 재료는 유지하고, 구도·배경·배치(음식 위치/앵글)만 바꿔라.",
+    "",
+    "Shoot it clearly differently from the reference — all of these:",
+    changeRules(v),
+    `(The reference was ${a.original_angle} on ${a.original_background_en} — do not reuse that angle or background.)`,
+    "같은 요리·같은 재료는 유지하고, 앵글·거리·화면 속 위치·재료 배치·배경은 한눈에 다르게 바꿔라.",
     "",
     REALISM_RULE,
     "",
@@ -204,16 +251,15 @@ export async function remakeSlideImage({ image, title = "", body = "" }: ImageGe
   } else {
     const analysis = MODE === "describe" ? await analyze(client, image!) : null;
     if (analysis) {
-      const angle = pick(ANGLE_KEYS.filter((k) => k !== analysis.original_angle));
       res = await client.images.generate({
         ...common,
-        prompt: describedPrompt(analysis, ANGLE_FRAMINGS[angle], pick(SETTINGS)),
+        prompt: describedPrompt(analysis, pickVariation(analysis.original_angle)),
       });
     } else {
       res = await client.images.edit({
         ...common,
         image: await toFile(source.data, `slide.${source.type.split("/")[1]}`, { type: source.type }),
-        prompt: editPrompt(pick(FRAMINGS), pick(SETTINGS)),
+        prompt: editPrompt(pickVariation()),
       });
     }
   }
