@@ -180,6 +180,7 @@ try {
       assert.ok(ins.includes("3번째 줄은 선언형으로 끝냅니다"), "표지 마무리 선언형");
       assert.ok(ins.includes("원본에 없는 재료·분량·비율·온도·시간을 지어내지 마세요"), "레시피 수치 날조 금지");
       assert.ok(ins.includes("미지근한 표현 금지"), "미지근한 표현 금지");
+      assert.ok(ins.includes("어미를 겹쳐 붙여 없는 말을 만들지 마세요"), "비문 방지");
     }],
     ["사진 글씨 읽기(vision) 요청 형식", () => remix("CASE:ok", { imageDataUrls: [tinyJpeg, tinyJpeg] }), (r) => {
       assert.equal(r.status, 200);
