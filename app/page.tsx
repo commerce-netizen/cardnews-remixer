@@ -39,6 +39,7 @@ export default function Home() {
   // 결과
   const [source, setSource] = useState<Source | null>(null);
   const [slides, setSlides] = useState<Slide[]>([]);
+  // AI가 각색한 캡션 본문 (CTA·고지 문구는 Editor가 템플릿대로 붙인다)
   const [caption, setCaption] = useState("");
 
   const runRemix = async (src: Source, back: Step) => {
@@ -248,9 +249,8 @@ export default function Home() {
       {step === "edit" && source && (
         <Editor
           slides={slides}
-          caption={caption}
+          captionBody={caption}
           onChangeSlides={setSlides}
-          onChangeCaption={setCaption}
           // 다시 각색해도 사용자가 바꾼 사진은 유지
           onRemixAgain={() => runRemix({ ...source, images: slides.map((s) => s.image) }, "edit")}
           onRestart={restart}

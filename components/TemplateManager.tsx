@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { SlidePreview } from "./SlideCard";
+import { buildCaption } from "@/lib/caption";
 import { FONTS, loadFonts } from "@/lib/webfonts";
 import {
   ALIGN_LABEL,
@@ -18,6 +19,7 @@ import {
   templateFontIds,
   uniqueName,
   type Align,
+  type CaptionStyle,
   type Template,
   type TextSize,
   type TextStyle,
@@ -34,6 +36,12 @@ const SAMPLE: Record<Side, Slide> = {
 
 type Side = "cover" | "body";
 const SIDE_LABEL: Record<Side, string> = { cover: "표지 (1번 장)", body: "내지 (2번 장부터)" };
+
+/** 캡션 CTA 미리보기에 쓰는 보기글 (AI가 쓰는 본문 자리) */
+const SAMPLE_CAPTION_BODY =
+  "맛집에서 먹던 그 떡볶이, 집에서도 그대로 만들 수 있어요😳 " +
+  "양념장에 비법 소스 한 스푼만 더하면 감칠맛이 확 살아나요✨ " +
+  "며칠 내내 먹어도 안 질려서 하나쯤 알아두면 정말 유용해요💗";
 
 const TEXT_COLORS = ["#ffffff", "#1c1c1e", "#ffe14d", "#ff5a3c", "#2f6bff", "#1b7f3a"];
 const BOX_COLORS = ["#ffffff", "#000000", "#1c1c1e", "#ffe14d", "#2f6bff", "#c62828"];
@@ -122,6 +130,8 @@ export default function TemplateManager({ onClose, onPick }: Props) {
     setDraft((d) => (d ? { ...d, [s]: { ...d[s], ...p } } : d));
   const patchWm = (p: Partial<WatermarkStyle>) =>
     setDraft((d) => (d ? { ...d, watermark: { ...d.watermark, ...p } } : d));
+  const patchCaption = (p: Partial<CaptionStyle>) =>
+    setDraft((d) => (d ? { ...d, caption: { ...d.caption, ...p } } : d));
 
   // ── 편집 화면 ───────────────────────────────────────────────
   if (draft) {
@@ -291,6 +301,42 @@ export default function TemplateManager({ onClose, onPick }: Props) {
           <p className="muted small" style={{ margin: 0 }}>
             오른쪽 위 <b>[광고]</b> 표시는 쿠팡 파트너스 규정상 꼭 들어가야 해서 항상 붙어요.
           </p>
+        </section>
+
+        <section className="card stack">
+          <h2 style={{ margin: 0 }}>캡션 CTA (댓글 유도 문구)</h2>
+          <p className="muted small" style={{ margin: 0 }}>
+            인스타 본문 글의 <b>맨 윗줄</b>과 <b>맨 아랫줄</b>에 항상 들어가는 문구예요.
+            가운데 본문은 AI가 사진에 맞게 새로 써 줘요.
+          </p>
+
+          <div>
+            <label className="field-label" htmlFor="cta-top">맨 윗줄</label>
+            <input
+              id="cta-top"
+              type="text"
+              value={draft.caption.topCta}
+              onChange={(e) => patchCaption({ topCta: e.target.value })}
+              placeholder="예) 🤤 댓글에 '나도' 남겨주세요! (비우면 안 들어감)"
+              autoComplete="off"
+            />
+          </div>
+          <div>
+            <label className="field-label" htmlFor="cta-bottom">맨 아랫줄</label>
+            <input
+              id="cta-bottom"
+              type="text"
+              value={draft.caption.bottomCta}
+              onChange={(e) => patchCaption({ bottomCta: e.target.value })}
+              placeholder="예) 💬 레시피 궁금하면 댓글 남겨주세요! 👉 (비우면 안 들어감)"
+              autoComplete="off"
+            />
+          </div>
+
+          <div>
+            <span className="field-label">이렇게 올라가요</span>
+            <div className="caption-preview">{buildCaption(SAMPLE_CAPTION_BODY, draft)}</div>
+          </div>
         </section>
 
         <div className="row">

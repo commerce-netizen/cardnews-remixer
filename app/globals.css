@@ -275,6 +275,16 @@ input[type="range"] { width: 100%; height: 40px; accent-color: var(--primary); }
   padding: 3px 14px;
 }
 
+/* 캡션 미리보기 */
+.caption-preview {
+  background: #f1f0ec;
+  border-radius: 12px;
+  padding: 18px 18px;
+  font-size: 1rem;
+  line-height: 1.7;
+  white-space: pre-wrap;
+}
+
 /* 편집 화면 위에 겹쳐 띄우는 템플릿 화면 */
 .overlay-page {
   position: fixed;
