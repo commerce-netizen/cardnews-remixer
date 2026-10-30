@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 import Editor from "@/components/Editor";
 import { prepareImages, type PreparedImage } from "@/lib/client-images";
@@ -150,6 +151,10 @@ export default function Home() {
 
       {step === "home" && (
         <>
+          <nav className="tabs">
+            <span className="tab on">카드뉴스 만들기</span>
+            <Link className="tab" href="/templates">디자인 템플릿</Link>
+          </nav>
           <h1>카드뉴스 각색기</h1>
           <p className="lead">인스타그램 카드뉴스 주소만 넣으면, 글과 디자인을 새롭게 바꿔 드려요.</p>
 
