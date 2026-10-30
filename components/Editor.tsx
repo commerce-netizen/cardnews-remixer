@@ -199,10 +199,11 @@ export default function Editor({ slides, captionBody, dmContent, onChangeSlides,
       )}
 
       <h1>각색이 끝났어요!</h1>
-      <p className="lead">장마다 사진과 글을 확인하고, 고치고 싶은 곳은 직접 고치세요. 다 됐으면 맨 아래 초록 버튼을 누르세요.</p>
+      <p className="lead">사진과 글을 확인하고 고친 뒤, 아래 초록 버튼을 누르세요.</p>
 
       {error && <div className="notice notice-error" role="alert">{error}</div>}
 
+      <div className="duo">
       <section className="card stack">
         <h2 style={{ margin: 0 }}>① 디자인 템플릿</h2>
         <div>
@@ -230,9 +231,11 @@ export default function Editor({ slides, captionBody, dmContent, onChangeSlides,
           autoComplete="off"
         />
       </section>
+      </div>
 
-      <h2 style={{ marginTop: 40 }}>③ 장마다 사진·글 확인하기</h2>
-      <div className="slide-editor">
+      <h2 style={{ marginTop: 40, marginBottom: 6 }}>③ 장마다 사진·글 확인하기</h2>
+      <p className="rail-hint">옆으로 밀어서 다음 장을 보세요 →</p>
+      <div className="slide-rail">
         {slides.map((s, i) => {
           const cover = i === 0;
           const field = cover ? "title" : "body";
@@ -312,8 +315,10 @@ export default function Editor({ slides, captionBody, dmContent, onChangeSlides,
         })}
       </div>
 
-      <section className="card" style={{ marginTop: 40 }}>
-        <h2>④ 캡션(본문 글) 확인하기</h2>
+      <h2 style={{ marginTop: 40, marginBottom: 16 }}>④ 올릴 글 확인하기</h2>
+      <div className="trio">
+      <section className="card">
+        <h2>캡션 (본문 글)</h2>
         <textarea rows={12} value={caption} onChange={(e) => { setCaption(e.target.value); setResults(null); }} aria-label="캡션" />
         <p className="muted small" style={{ margin: "12px 0 0" }}>
           맨 윗줄·맨 아랫줄 문구는 <b>템플릿</b>에서 바꿀 수 있어요. 여기서 고친 건 이번 한 번만 적용돼요.
@@ -324,7 +329,7 @@ export default function Editor({ slides, captionBody, dmContent, onChangeSlides,
       </section>
 
       <section className="card">
-        <h2>⑤ 고정 댓글</h2>
+        <h2>고정 댓글</h2>
         <p className="muted small" style={{ margin: "0 0 14px" }}>
           게시물 올린 뒤 <b>맨 위에 고정</b>해 둘 댓글이에요. 문구는 <b>템플릿</b>에서 바꿀 수 있어요.
         </p>
@@ -341,7 +346,7 @@ export default function Editor({ slides, captionBody, dmContent, onChangeSlides,
 
       {dm && (
         <section className="card">
-          <h2>⑥ 자동 DM (댓글 단 사람에게 보낼 글)</h2>
+          <h2>자동 DM</h2>
           <p className="muted small" style={{ margin: "0 0 14px" }}>
             맨 윗줄·맨 아랫줄은 <b>템플릿</b>에서 바꿔요. <b>비밀재료가 뭔지는 일부러 안 적혀 있어요</b> —
             그걸 알려면 링크를 눌러야 하니까요.
@@ -352,6 +357,7 @@ export default function Editor({ slides, captionBody, dmContent, onChangeSlides,
           </button>
         </section>
       )}
+      </div>
 
       {results && (
         <section className="card" style={{ borderColor: "var(--ok)" }}>

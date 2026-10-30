@@ -155,8 +155,30 @@ export default function TemplateManager({ onClose, onPick }: Props) {
     return (
       <div>
         <h1>템플릿 고치기</h1>
-        <p className="lead">바꾸는 대로 아래 미리보기에 바로 나타나요.</p>
+        <p className="lead">오른쪽에서 바꾸면 왼쪽 미리보기에 바로 나타나요.</p>
 
+        <div className="split">
+          {/* 왼쪽: 바뀌는 걸 바로 보는 미리보기 (PC는 화면에 고정, 모바일은 위에 붙음) */}
+          <div className="sticky">
+            <div className="seg seg-big" role="tablist" aria-label="표지와 내지 고르기">
+              {(["cover", "body"] as Side[]).map((s) => (
+                <button key={s} role="tab" aria-selected={side === s} className={side === s ? "on" : ""} onClick={() => setSide(s)}>
+                  {SIDE_LABEL[s]}
+                </button>
+              ))}
+            </div>
+            <section className="card">
+              <SlidePreview
+                slide={SAMPLE[side]}
+                index={side === "cover" ? 0 : 1}
+                watermark={draft.watermark.text}
+                template={draft}
+              />
+            </section>
+          </div>
+
+          {/* 오른쪽: 설정 */}
+          <div>
         <section className="card stack">
           <div>
             <label className="field-label" htmlFor="tpl-name">템플릿 이름</label>
@@ -168,23 +190,6 @@ export default function TemplateManager({ onClose, onPick }: Props) {
               autoComplete="off"
             />
           </div>
-        </section>
-
-        <div className="seg seg-big" role="tablist" aria-label="표지와 내지 고르기">
-          {(["cover", "body"] as Side[]).map((s) => (
-            <button key={s} role="tab" aria-selected={side === s} className={side === s ? "on" : ""} onClick={() => setSide(s)}>
-              {SIDE_LABEL[s]}
-            </button>
-          ))}
-        </div>
-
-        <section className="card">
-          <SlidePreview
-            slide={SAMPLE[side]}
-            index={side === "cover" ? 0 : 1}
-            watermark={draft.watermark.text}
-            template={draft}
-          />
         </section>
 
         <section className="card stack">
@@ -396,6 +401,8 @@ export default function TemplateManager({ onClose, onPick }: Props) {
         <div className="row">
           <button className="btn btn-secondary" onClick={() => setDraft(null)}>취소</button>
           <button className="btn btn-primary" onClick={save}>💾 저장하고 이 템플릿 쓰기</button>
+        </div>
+          </div>
         </div>
       </div>
     );
