@@ -189,6 +189,102 @@ textarea { resize: vertical; min-height: 120px; line-height: 1.55; }
   .card { padding: 22px 16px; }
 }
 
+/* 위쪽 탭 (만들기 / 템플릿) */
+.tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 28px;
+  border-bottom: 3px solid var(--line);
+}
+.tab {
+  display: block;
+  padding: 14px 20px;
+  font-weight: 800;
+  font-size: 1.05rem;
+  color: var(--muted);
+  text-decoration: none;
+  border-bottom: 5px solid transparent;
+  margin-bottom: -3px;
+}
+.tab.on { color: var(--text); border-bottom-color: var(--primary); }
+
+/* 선택 상자 */
+select {
+  width: 100%;
+  font: inherit;
+  font-size: 1.15rem;
+  color: var(--text);
+  background: #fff;
+  border: 3px solid var(--line);
+  border-radius: 14px;
+  padding: 16px 18px;
+  outline: none;
+}
+select:focus { border-color: var(--primary); }
+
+/* 몇 개 중 하나 고르기 */
+.seg { display: flex; gap: 8px; flex-wrap: wrap; }
+.seg button {
+  flex: 1 1 90px;
+  font: inherit;
+  font-weight: 700;
+  font-size: 1.05rem;
+  min-height: 60px;
+  padding: 10px 14px;
+  background: #fff;
+  color: var(--text);
+  border: 3px solid var(--line);
+  border-radius: 14px;
+  cursor: pointer;
+}
+.seg button.on { background: var(--primary); border-color: var(--primary); color: #fff; }
+.seg-big { margin-bottom: 24px; }
+.seg-big button { min-height: 68px; font-size: 1.15rem; }
+
+/* 색 고르기 */
+.swatches { display: flex; gap: 10px; flex-wrap: wrap; }
+.swatch {
+  width: 56px;
+  height: 56px;
+  padding: 0;
+  border-radius: 14px;
+  border: 3px solid var(--line);
+  cursor: pointer;
+}
+.swatch.on { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(31, 94, 255, 0.25); }
+.swatch-pick { background: conic-gradient(red, yellow, lime, aqua, blue, magenta, red); }
+
+/* 켜기/끄기 */
+.toggle { display: flex; align-items: center; gap: 14px; cursor: pointer; font-size: 1.05rem; }
+.toggle input { width: 32px; height: 32px; accent-color: var(--primary); flex: none; }
+
+input[type="range"] { width: 100%; height: 40px; accent-color: var(--primary); }
+
+/* 템플릿 목록 */
+.tpl-grid { display: grid; gap: 20px; }
+.tpl-card.on { border-color: var(--primary); }
+.tpl-head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 16px; }
+.tpl-shots { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.tpl-shots .preview-frame { max-width: none; }
+.badge {
+  background: var(--primary);
+  color: #fff;
+  font-weight: 800;
+  font-size: 0.85rem;
+  border-radius: 999px;
+  padding: 3px 14px;
+}
+
+/* 편집 화면 위에 겹쳐 띄우는 템플릿 화면 */
+.overlay-page {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  background: var(--bg);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
 /* AI 새 사진 만드는 중 표시 (미리보기 위) */
 .preview-overlay {
   position: absolute;
