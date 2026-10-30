@@ -72,7 +72,7 @@ function analysisFor(c) {
     key_ingredients_en: ["rice cakes", "fish cakes", "ramen noodles", "green onion"],
     photo_look_en: "slightly warm indoor phone photo, soft overhead light",
     original_angle: "top-down",
-    original_background_en: "dark gas stove on a wooden table",
+    original_background_en: "dark gas stove on a wooden table", is_collage: false, collage_layout_en: "",
   };
   return [200, response([reasoning, msg([{ type: "output_text", text: JSON.stringify(analysis), annotations: [], logprobs: [] }])])];
 }
@@ -161,10 +161,16 @@ try {
 
   /** 바꾸는 축 다섯 가지가 모두 지시돼야 한다 (하나만 바꾸면 원본과 너무 비슷해짐) */
   const checkAllAxes = (prompt) => {
-    for (const axis of [/- Camera angle: /, /- Distance \/ crop: /, /- Position in frame: /, /- Arrangement of the food: /, /- Background \/ table: /]) {
+    for (const axis of [/- Camera angle: /, /- How close: /, /- What is in the center: /, /- Arrangement of the food: /, /- The little background that shows: /]) {
       assert.match(prompt, axis);
     }
-    assert.match(prompt, /rearrange where each ingredient sits|rotate the whole dish|pile the ingredients less neatly|spread the ingredients out differently/);
+    assert.match(prompt, /rearrange where each ingredient sits|rotate the whole dish|pile the food less neatly|spread the pieces differently/);
+    // 구도 제약: 음식이 화면을 꽉 채우고 가운데 — 변화 축이 아니라 고정이어야 한다
+    assert.match(prompt, /The food MUST FILL THE FRAME/);
+    assert.match(prompt, /at least 85% of the image/);
+    assert.match(prompt, /NEVER place the dish small, far away, or off to one side/);
+    assert.match(prompt, /음식이 화면을 꽉 채우게, 한가운데에 크게/);
+    assert.ok(!/further back|more of the table around|off-center|wider so more of/.test(prompt), "멀리 빼거나 한쪽으로 치우치게 하는 지시가 남아 있으면 안 됨");
   };
 
   const cases = [
@@ -233,7 +239,8 @@ try {
       assert.match(prompt, /CLEARLY DIFFERENT from the input at first glance/);
       assert.match(prompt, /Do not reproduce the input's framing, angle or layout/);
       checkAllAxes(prompt);
-      assert.match(prompt, /앵글·거리·화면 속 위치·재료들의 배치·배경은 한눈에 다르게 바꿔라/);
+      assert.match(prompt, /앵글·거리·가운데 오는 것·재료들의 배치는 한눈에 다르게 바꿔라/);
+      assert.match(prompt, /keep that same grid layout/, "콜라주(조리과정 4분할)는 레이아웃 유지");
     }],
     ["AI 새 사진(기본): 분석 → 구도·배치가 다른 사진을 새로 생성", () => post("/api/image-gen", { image: photo("image") }), (r) => {
       assert.equal(r.status, 200);

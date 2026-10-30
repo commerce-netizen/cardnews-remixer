@@ -39,6 +39,20 @@ const REALISM_RULE = [
   "음식을 예쁘게 꾸미거나 과장하지 말고, 원본 사진의 사실적인 질감·분위기를 그대로 유지할 것.",
 ].join("\n");
 
+/**
+ * 구도 — 카드뉴스 사진이라 음식이 화면을 꽉 채워야 한다. 이건 변화 축이 아니라 **고정 제약**이다.
+ * (이걸 안 박아 두면 그릇이 작게, 한쪽으로 치우쳐 나오고 테이블만 넓게 보인다. 실측 확인)
+ */
+const FRAMING_RULE = [
+  "FRAMING (do not deviate): this is a vertical 4:5 food card. The food MUST FILL THE FRAME.",
+  "The dish is centered and takes up at least 85% of the image, cropped in close —",
+  "it is fine and expected that the rim of the plate or pan is cut off by the frame edges.",
+  "NEVER show large empty areas of table, floor, chairs, walls or background.",
+  "NEVER place the dish small, far away, or off to one side of the frame.",
+  "음식이 화면을 꽉 채우게, 한가운데에 크게. 접시·팬 테두리는 잘려도 된다.",
+  "테이블·바닥·배경이 넓게 보이면 안 되고, 음식이 작게 한쪽에 치우쳐도 안 된다.",
+].join("\n");
+
 /** 글자·그래픽 제거 — 원본 카드뉴스엔 자막·박스·그라데이션·워터마크가 박혀 있어도 결과엔 하나도 없어야 한다 */
 const CLEAN_RULE = [
   "REMOVE ALL TEXT AND GRAPHIC OVERLAYS: the input card-news photo has things burned into it —",
@@ -52,55 +66,57 @@ const CLEAN_RULE = [
 ].join("\n");
 
 /*
- * 바꾸는 축을 넷으로 나눠 각각 따로 뽑는다 (앵글 / 거리·크롭 / 프레임 안 위치 / 재료 배치).
- * 하나만 바꾸면 원본과 너무 비슷해 보여서, 매번 네 축을 모두 바꾸게 한다.
- * 다만 바꾸는 방향은 '실제로 다시 찍은 것 같은' 평범한 선택지 안에서만 고른다.
+ * 바꾸는 축을 넷으로 나눠 각각 따로 뽑는다 (앵글 / 얼마나 가까이 / 무엇이 가운데 / 재료 배치).
+ * 하나만 바꾸면 원본과 너무 비슷해 보여서, 매번 네 축을 모두 바꾼다.
+ * 단 **구도 제약(음식이 화면을 꽉 채우고 가운데)은 절대 건드리지 않는다** — 카드뉴스 사진이기 때문.
  */
 const ANGLES = {
-  "top-down": "straight top-down (90°), looking right down at the dish",
+  "top-down": "straight top-down (90°), looking right down into the dish",
   "45-degree": "a 45° three-quarter view, as a diner sitting at the table would shoot it",
-  "eye-level": "a low, almost table-height side view",
-  "close-up": "a tight close-up from slightly above, very near the food",
+  "eye-level": "a low, almost table-height view looking into the food",
+  "close-up": "a very tight close-up from slightly above, right next to the food",
 } as const;
 type Angle = keyof typeof ANGLES;
 const ANGLE_KEYS = Object.keys(ANGLES) as Angle[];
 
-const DISTANCES = [
-  "much closer than the input — the food fills almost the whole frame and the rim of the pan/plate is cropped off",
-  "a little closer, cropping one edge of the pan/plate",
-  "further back, showing the whole dish plus a good amount of the table around it",
+/** 전부 '가까이' 쪽 선택지다. 멀리 빼는 선택지는 없다 */
+const CLOSENESS = [
+  "extremely tight: just a few pieces of the food fill the entire frame, edge to edge",
+  "tight: the dish fills the frame and its rim is cropped off on at least two sides",
+  "close: the dish fills almost the whole frame, only a sliver of table visible at one edge",
 ];
-const FRAME_POSITIONS = [
-  "put the dish clearly off-center, toward the left of the frame",
-  "put the dish clearly off-center, toward the right of the frame",
-  "put the dish low in the frame with more empty table above it",
-  "put the dish high in the frame with more table below it",
+/** 무엇을 한가운데 둘지 — 위치가 아니라 '주인공'만 바꾼다 (항상 가운데) */
+const HEROES = [
+  "center one whole piece of the food, with the rest packed tightly around it",
+  "center a piece being lifted by chopsticks or a spoon, filling the middle of the frame",
+  "center the part where the sauce or seasoning sits thickest",
+  "center a cross-section / torn piece so the inside texture shows",
 ];
 const ARRANGEMENTS = [
-  "rearrange where each ingredient sits — the ones at the front move to the back and vice versa, and the groups are in a different order around the pan/plate",
-  "rotate the whole dish so a different ingredient faces the camera, and let the ingredients overlap each other differently",
-  "pile the ingredients less neatly — more mixed together and tumbled, the way it looks after being served and stirred",
-  "spread the ingredients out differently so a different part of the dish is the most visible",
+  "rearrange where each ingredient sits — the ones at the front move to the back and vice versa",
+  "rotate the whole dish so a different ingredient faces the camera, and let the pieces overlap differently",
+  "pile the food less neatly — more mixed and tumbled, the way it looks after being served and stirred",
+  "spread the pieces differently so a different part of the dish is the most visible",
 ];
+/** 배경은 거의 안 보이지만, 조금 보이는 부분만 바꾼다 */
 const SETTINGS = [
-  "an ordinary Korean restaurant table with a couple of everyday side dishes and a water cup nearby",
-  "a plain wooden table in a casual neighborhood restaurant",
-  "a simple home dining table with everyday utensils",
-  "a stainless steel table of a busy casual eatery",
-  "a light-colored table by a window with ordinary daylight",
+  "an ordinary restaurant table, barely visible at one edge",
+  "a plain wooden table, only a narrow strip showing",
+  "a simple home dining table, mostly hidden behind the food",
+  "a stainless steel table edge, just a sliver in one corner",
 ];
 
 const pick = <T,>(arr: readonly T[]) => arr[Math.floor(Math.random() * arr.length)];
 
-type Variation = { angle: string; distance: string; framePos: string; arrangement: string; setting: string };
+type Variation = { angle: string; closeness: string; hero: string; arrangement: string; setting: string };
 
 /** 원본 앵글은 빼고 네 축을 각각 무작위로 — 누를 때마다 확실히 다른 사진 */
 function pickVariation(originalAngle?: Angle): Variation {
   const keys = ANGLE_KEYS.filter((k) => k !== originalAngle);
   return {
     angle: ANGLES[pick(keys.length ? keys : ANGLE_KEYS)],
-    distance: pick(DISTANCES),
-    framePos: pick(FRAME_POSITIONS),
+    closeness: pick(CLOSENESS),
+    hero: pick(HEROES),
     arrangement: pick(ARRANGEMENTS),
     setting: pick(SETTINGS),
   };
@@ -110,10 +126,10 @@ function pickVariation(originalAngle?: Angle): Variation {
 function changeRules(v: Variation): string {
   return [
     `- Camera angle: ${v.angle}. This must be clearly different from the input's angle.`,
-    `- Distance / crop: ${v.distance}.`,
-    `- Position in frame: ${v.framePos}.`,
+    `- How close: ${v.closeness}.`,
+    `- What is in the center: ${v.hero}.`,
     `- Arrangement of the food: ${v.arrangement}.`,
-    `- Background / table: ${v.setting}.`,
+    `- The little background that shows: ${v.setting}.`,
   ].join("\n");
 }
 
@@ -131,7 +147,12 @@ function editPrompt(v: Variation) {
     changeRules(v),
     "",
     "같은 요리·같은 재료·같은 그릇·같은 사진 느낌은 그대로 두고,",
-    "앵글·거리·화면 속 위치·재료들의 배치·배경은 한눈에 다르게 바꿔라. 원본 구도를 따라 하지 마라.",
+    "앵글·거리·가운데 오는 것·재료들의 배치는 한눈에 다르게 바꿔라. 원본 구도를 따라 하지 마라.",
+    "",
+    "If the input is a multi-panel collage (for example a 2x2 grid of cooking steps),",
+    "keep that same grid layout — change each panel's shot, not the layout.",
+    "",
+    FRAMING_RULE,
     "",
     REALISM_RULE,
     "",
@@ -151,6 +172,10 @@ const AnalysisSchema = z.object({
     .describe("how the photo itself looks: lighting, color tone, sharpness, phone-or-camera feel, mood (English, short, factual)"),
   original_angle: z.enum(["top-down", "45-degree", "eye-level", "close-up"]).describe("camera angle of the reference photo"),
   original_background_en: z.string().describe("background/surface/setting of the reference (English, short)"),
+  is_collage: z.boolean().describe("여러 장을 한 장에 붙인 사진인지 (예: 조리 과정 2x2 그리드)"),
+  collage_layout_en: z
+    .string()
+    .describe("collage일 때만: layout and what each panel shows (English, short). 아니면 빈 문자열"),
 });
 type Analysis = z.infer<typeof AnalysisSchema>;
 
@@ -197,7 +222,10 @@ function describedPrompt(a: Analysis, v: Variation) {
     "Shoot it clearly differently from the reference — all of these:",
     changeRules(v),
     `(The reference was ${a.original_angle} on ${a.original_background_en} — do not reuse that angle or background.)`,
-    "같은 요리·같은 재료는 유지하고, 앵글·거리·화면 속 위치·재료 배치·배경은 한눈에 다르게 바꿔라.",
+    "같은 요리·같은 재료는 유지하고, 앵글·거리·가운데 오는 것·재료 배치는 한눈에 다르게 바꿔라.",
+    a.is_collage ? `Keep the same multi-panel layout: ${a.collage_layout_en}. Change each panel's shot, not the layout.` : "",
+    "",
+    FRAMING_RULE,
     "",
     REALISM_RULE,
     "",
@@ -211,6 +239,8 @@ function textPrompt(topic: string) {
     "A realistic, unedited-looking everyday photo of the food described below, vertical 4:5, as if taken with a phone at a restaurant.",
     `Subject (Korean description, do NOT write it in the image): ${topic.slice(0, 300)}`,
     `Setting: ${pick(SETTINGS)}.`,
+    "",
+    FRAMING_RULE,
     "",
     REALISM_RULE,
     "",
