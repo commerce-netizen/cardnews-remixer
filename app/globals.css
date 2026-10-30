@@ -275,6 +275,10 @@ input[type="range"] { width: 100%; height: 40px; accent-color: var(--primary); }
   padding: 3px 14px;
 }
 
+/* 화면 맨 위 돌아가기 줄 */
+.topbar { margin-bottom: 20px; }
+.btn-back { min-height: 56px; padding: 10px 20px; font-size: 1.05rem; }
+
 /* 캡션 미리보기 */
 .caption-preview {
   background: #f1f0ec;

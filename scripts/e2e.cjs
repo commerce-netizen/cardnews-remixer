@@ -112,6 +112,14 @@ const BASE = `http://127.0.0.1:${PORT}`;
     await card2.locator(".preview-overlay").waitFor({ state: "detached", timeout: 30_000 });
     console.log("✓ 이전 사진으로 되돌리기 / 다시 만들기");
 
+    // 맨 위 '← 처음으로' — 한 번 확인한 뒤에만 돌아간다 (실수로 작업물이 날아가지 않게)
+    await page.click("button:has-text('← 처음으로')");
+    await page.waitForSelector("text=지금 만든 카드뉴스는 사라져요");
+    await page.click("button:has-text('아니요, 계속 할게요')");
+    assert.ok(await page.isVisible("text=각색이 끝났어요"), "취소하면 그대로 남아 있다");
+    assert.equal(await page.inputValue("#text0"), "직접 고친\n표지 제목", "작업물 유지");
+    console.log("✓ 맨 위 '← 처음으로' + 되돌릴 수 없음 확인");
+
     const download = page.waitForEvent("download");
     await page.click("text=승인하고 내려받기");
     const d = await download;

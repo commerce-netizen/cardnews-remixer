@@ -35,6 +35,7 @@ export default function Editor({ slides, captionBody, onChangeSlides, onRemixAga
   const [templates, setTemplates] = useState<Template[]>(BUILTIN_TEMPLATES);
   const [templateId, setTemplateId] = useState(DEFAULT_TEMPLATE.id);
   const [showTemplates, setShowTemplates] = useState(false);
+  const [askRestart, setAskRestart] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [results, setResults] = useState<string[] | null>(null);
@@ -159,6 +160,24 @@ export default function Editor({ slides, captionBody, onChangeSlides, onRemixAga
 
   return (
     <div>
+      <div className="topbar">
+        <button className="btn btn-secondary btn-back" onClick={() => setAskRestart(true)} disabled={!!busy}>
+          ← 처음으로
+        </button>
+      </div>
+
+      {askRestart && (
+        <div className="notice notice-info">
+          <p style={{ margin: "0 0 12px" }}>
+            처음 화면으로 돌아가면 <b>지금 만든 카드뉴스는 사라져요.</b> 괜찮으세요?
+          </p>
+          <div className="row">
+            <button className="btn btn-secondary" onClick={() => setAskRestart(false)}>아니요, 계속 할게요</button>
+            <button className="btn btn-primary" onClick={onRestart}>네, 처음으로</button>
+          </div>
+        </div>
+      )}
+
       <h1>각색이 끝났어요!</h1>
       <p className="lead">장마다 사진과 글을 확인하고, 고치고 싶은 곳은 직접 고치세요. 다 됐으면 맨 아래 초록 버튼을 누르세요.</p>
 
@@ -309,7 +328,7 @@ export default function Editor({ slides, captionBody, onChangeSlides, onRemixAga
 
       <div className="row" style={{ marginTop: 16 }}>
         <button className="btn btn-secondary" onClick={onRemixAgain} disabled={!!busy}>🔄 글 다시 각색하기</button>
-        <button className="btn btn-secondary" onClick={onRestart} disabled={!!busy}>처음으로</button>
+        <button className="btn btn-secondary" onClick={() => { setAskRestart(true); window.scrollTo(0, 0); }} disabled={!!busy}>처음으로</button>
       </div>
 
       <div className="approve-bar">
