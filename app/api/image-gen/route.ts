@@ -3,7 +3,7 @@ import { isImageGenEnabled, remakeSlideImage, type ImageGenRequest } from "@/lib
 import { friendlyError, hasApiKey, isMockMode } from "@/lib/openai";
 
 export const runtime = "nodejs";
-// 사진 분석 + 새 사진 생성으로 1~2분 걸릴 수 있음
+// 새 사진 만들기는 1~2분 걸릴 수 있음
 export const maxDuration = 240;
 
 export async function POST(req: Request) {

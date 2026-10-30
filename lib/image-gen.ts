@@ -8,12 +8,12 @@ import { IMAGE_MODEL, isMockMode, openai, TEXT_MODEL } from "./openai";
 export const isImageGenEnabled = () => process.env.NEXT_PUBLIC_ENABLE_IMAGE_GEN !== "0";
 
 /**
- * 만드는 방식
- *   describe (기본): 원본 사진을 비전으로 분석 → 같은 요리를 '새로' 생성. 원본 사진을 이미지 모델에 넣지 않으므로
- *                    구도가 확실히 달라지고, 원본에 박힌 글자·박스·그라데이션이 옮겨 올 길이 없다.
- *   edit:            원본 사진을 이미지 편집 모델에 넣어 바꾼다 (원본을 더 닮음). 분석이 실패하면 자동으로 이 방식을 쓴다.
+ * 만드는 방식 — 목표: '원본처럼 사실적이지만 구도·배경·배치만 바뀐, 글자 없는 사진'
+ *   edit (기본):  원본 사진을 이미지 편집 모델에 넣어 구도·배경·배치만 바꾼다. 원본의 실제 질감·색감·분위기를 그대로 살린다.
+ *   describe:     원본을 비전으로 분석 → 같은 요리를 새로 생성. 변화는 크지만 원본 질감을 직접 보지 못해 덜 사실적일 수 있다.
+ *                 분석이 실패하면 edit 로 대체한다.
  */
-const MODE: "describe" | "edit" = process.env.OPENAI_IMAGE_MODE === "edit" ? "edit" : "describe";
+const MODE: "describe" | "edit" = process.env.OPENAI_IMAGE_MODE === "describe" ? "describe" : "edit";
 
 type Quality = "low" | "medium" | "high";
 // 저비용 기본값 low
@@ -26,70 +26,90 @@ const QUALITY: Quality = (["low", "medium", "high"] as const).find((q) => q === 
  */
 const SIZE = /^gpt-image-2\.5/.test(IMAGE_MODEL) ? "1088x1360" : "1024x1536";
 
-/** 글자·그래픽 제거 지시 — 원본 카드뉴스엔 자막·박스·그라데이션·워터마크가 박혀 있어도 결과엔 하나도 없어야 한다 */
-const CLEAN_RULE = [
-  "ABSOLUTELY NO TEXT OR GRAPHIC OVERLAYS: the reference card-news photo has things burned into it —",
-  "titles, captions, subtitles, a semi-transparent text box, a dark gradient band at the bottom, watermarks",
-  '(e.g. "맛집도둑"), the "[광고]" ad label, logos, stickers, frames, borders. None of these may appear.',
-  "The output must be a clean, natural, full-bleed food photograph only: no letters, no numbers, no Korean or English characters,",
-  "no captions, no text boxes, no translucent panels, no gradient bars or vignette bands, no watermarks, no labels, no logos, no borders.",
-  "원본 사진에 박혀 있는 모든 텍스트·자막·워터마크·[광고] 라벨·하단 그라데이션·반투명 텍스트박스를 완전히 제거하고,",
-  "글자나 그래픽 오버레이가 하나도 없는 깨끗한 음식 사진만 만들어라.",
+/** 사실감 — 미화·보정 없이 실제로 찍은 사진처럼 (AI 티 금지) */
+const REALISM_RULE = [
+  "PHOTOREALISM: it must look like an ordinary real photo actually taken with a camera or phone — not AI-generated.",
+  "Do NOT beautify, enhance, idealize or stylize the food. Do not make it look better or more attractive than the original.",
+  "Keep the original photo's real textures, imperfections, natural lighting, color tone, white balance, sharpness, grain and overall mood.",
+  "Avoid anything that looks AI-made: no over-smooth or plastic surfaces, no overly perfect or symmetric arrangements,",
+  "no glossy CGI look, no added dramatic lighting, no exaggerated colors or saturation, no artificial blur or bokeh effects.",
+  "실제로 찍은 사진처럼 자연스럽고 사실적으로(photorealistic). AI로 생성한 티가 안 나게, 과하게 완벽하거나 매끈하게 스타일라이즈하지 말 것.",
+  "음식을 예쁘게 꾸미거나 과장하지 말고, 원본 사진의 사실적인 질감·분위기를 그대로 유지할 것.",
 ].join("\n");
 
-/** 더 맛있어 보이게 — 전문 푸드 포토그래피 */
-function deliciousRule(hot: boolean) {
-  return [
-    "Make it look MORE delicious than the reference: high-end professional food photography, magazine/advertising quality.",
-    "Appetizing warm key light with soft natural shadows, crisp and sharp textures, glossy sheen on sauces and glazes,",
-    "vivid rich natural colors, appetizing highlights, shallow depth of field with a creamy blurred background.",
-    hot ? "The dish is freshly cooked and hot: visible soft wisps of rising steam." : "Fresh, just-served look.",
-    "전문 푸드 포토그래피 퀄리티로, 먹음직스러운 조명·선명한 질감·모락모락 김·윤기·생생한 색감을 강조하라.",
-  ].join("\n");
-}
+/** 글자·그래픽 제거 — 원본 카드뉴스엔 자막·박스·그라데이션·워터마크가 박혀 있어도 결과엔 하나도 없어야 한다 */
+const CLEAN_RULE = [
+  "REMOVE ALL TEXT AND GRAPHIC OVERLAYS: the input card-news photo has things burned into it —",
+  "titles, captions, subtitles, a semi-transparent text box, a dark gradient band at the bottom, watermarks",
+  '(e.g. "맛집도둑"), the "[광고]" ad label, logos, stickers, frames, borders. Remove every one of them completely.',
+  "Where they covered the photo, show the real food, dish and table naturally as if nothing was ever there.",
+  "The output must be a clean full-bleed photo with no letters, no numbers, no Korean or English characters, no captions,",
+  "no text boxes, no translucent panels, no gradient bars, no watermarks, no labels, no logos, no borders. Do not add any new text.",
+  "원본 사진에 박혀 있는 모든 텍스트·자막·워터마크·[광고] 라벨·하단 그라데이션·반투명 텍스트박스를 완전히 제거하고,",
+  "글자나 그래픽 오버레이가 하나도 없는 깨끗한 사진만 만들어라.",
+].join("\n");
 
-/* 원본과 확실히 다르게: 카메라 앵글·배경 후보 (원본 앵글은 제외하고 무작위로 골라 누를 때마다 다른 사진) */
-const ANGLES = {
-  "top-down": "straight top-down flat lay (90°) showing the whole dish as a graphic composition",
-  "45-degree": "classic 45-degree three-quarter view, the dish filling the frame",
-  "eye-level": "low eye-level side view close to the table surface, dramatic depth",
-  "close-up": "tight close-up of the most delicious part, chopsticks or a spoon lifting a juicy bite toward the camera",
-} as const;
-type Angle = keyof typeof ANGLES;
-const ANGLE_KEYS = Object.keys(ANGLES) as Angle[];
-
-const BACKGROUNDS = [
-  "dark slate stone tabletop with moody low-key lighting",
-  "warm rustic wooden table in a cozy Korean restaurant, a few small side dishes (banchan) softly blurred around",
-  "clean white marble counter in bright airy daylight",
-  "Korean street-food stall table at night with warm golden bokeh lights behind",
-  "light linen tablecloth next to a sunny window, fresh morning light",
-  "deep navy-blue matte table with a single warm spotlight",
+/* 바꾸는 것은 구도·배경·배치뿐 — 평범하고 현실적인 변화 후보 중 무작위로 골라 누를 때마다 다른 사진 */
+const FRAMINGS = [
+  "shoot from a noticeably higher angle, looking more straight down at the dish",
+  "shoot from a lower, more side-on angle, closer to table height",
+  "frame it closer so the dish fills more of the frame, cropping part of the pan or plate",
+  "frame it wider so more of the table around the dish is visible",
+  "move the dish off-center to one side of the frame instead of the middle",
 ];
+const SETTINGS = [
+  "an ordinary Korean restaurant table with a couple of everyday side dishes and a water cup nearby",
+  "a plain wooden table in a casual neighborhood restaurant",
+  "a simple home dining table with everyday utensils",
+  "a stainless steel table of a busy casual eatery",
+  "a light-colored table by a window with ordinary daylight",
+];
+const ANGLE_FRAMINGS = {
+  "top-down": FRAMINGS[0],
+  "45-degree": "a typical 45-degree view, as a diner sitting at the table would shoot it",
+  "eye-level": FRAMINGS[1],
+  "close-up": FRAMINGS[2],
+} as const;
+type Angle = keyof typeof ANGLE_FRAMINGS;
+const ANGLE_KEYS = Object.keys(ANGLE_FRAMINGS) as Angle[];
 
 const pick = <T,>(arr: readonly T[]) => arr[Math.floor(Math.random() * arr.length)];
 
+/** 편집 방식 프롬프트: 같은 요리·재료·사진 느낌, 구도·배경·배치만 변경 */
+function editPrompt(framing: string, setting: string) {
+  return [
+    "Edit this photo into a different shot of the exact same food, as if the same person took another real photo of it.",
+    "KEEP: the same dish, the same ingredients and amounts, the same cookware/plate, and the same real photographic look (see PHOTOREALISM).",
+    "CHANGE ONLY the composition, the background and the placement:",
+    `- Composition / camera: ${framing}.`,
+    `- Background / table: ${setting}.`,
+    "- Placement: the dish may sit in a different position on the table.",
+    "같은 요리·같은 재료는 유지하고, 구도·배경·배치(음식 위치/앵글)만 바꿔라.",
+    "",
+    REALISM_RULE,
+    "",
+    CLEAN_RULE,
+  ].join("\n");
+}
+
 const AnalysisSchema = z.object({
-  is_food: z.boolean().describe("주 피사체가 음식인지"),
   dish_name_ko: z.string().describe("요리 이름 (한글)"),
   dish_name_en: z.string().describe("dish name in English"),
   dish_description_en: z
     .string()
-    .describe("detailed English description of the food only: components, ingredients, sauce, colors, textures, cookware. Ignore any text/overlays."),
+    .describe("plain, factual English description of the food only: components, ingredients, sauce, cookware. Ignore any text/overlays."),
   key_ingredients_en: z.array(z.string()).describe("visible key ingredients that must stay, in English"),
-  is_hot_dish: z.boolean().describe("hot/steaming dish?"),
-  original_angle: z.enum(["top-down", "45-degree", "eye-level", "close-up"]).describe("camera angle of the reference photo"),
-  original_composition_en: z.string().describe("how food is arranged/framed in the reference (English, short)"),
-  original_background_en: z.string().describe("background/surface/setting of the reference (English, short)"),
-  alternative_plating_en: z
+  photo_look_en: z
     .string()
-    .describe("a clearly different but natural way to plate/serve this same dish (different vessel, portion or arrangement), English"),
+    .describe("how the photo itself looks: lighting, color tone, sharpness, phone-or-camera feel, mood (English, short, factual)"),
+  original_angle: z.enum(["top-down", "45-degree", "eye-level", "close-up"]).describe("camera angle of the reference photo"),
+  original_background_en: z.string().describe("background/surface/setting of the reference (English, short)"),
 });
 type Analysis = z.infer<typeof AnalysisSchema>;
 
-const ANALYZE_INSTRUCTIONS = `You analyze a food photo taken from a Korean Instagram card-news post, so an image model can re-shoot the same dish from scratch.
-Describe only the real food scene. Completely ignore anything overlaid on the photo: titles, captions, text boxes, gradients, watermarks, "[광고]" labels.
-Be specific about the dish and ingredients so the same food can be recreated faithfully.`;
+const ANALYZE_INSTRUCTIONS = `You analyze a food photo taken from a Korean Instagram card-news post, so an image model can re-take the same dish realistically.
+Describe only the real scene, plainly and factually — no praise or marketing words. Completely ignore anything overlaid on the photo:
+titles, captions, text boxes, gradients, watermarks, "[광고]" labels.`;
 
 async function analyze(client: OpenAI, image: string): Promise<Analysis | null> {
   const res = await client.responses
@@ -119,47 +139,31 @@ async function analyze(client: OpenAI, image: string): Promise<Analysis | null> 
   return res.output_parsed;
 }
 
-/** 분석 결과로 '같은 요리, 확실히 다른 새 사진' 프롬프트 */
-function buildDescribedPrompt(a: Analysis, angle: Angle, background: string) {
-  const subject = a.is_food ? "food" : "product";
+/** 분석 결과로 '같은 요리를 다시 찍은 사실적인 사진' 프롬프트 */
+function describedPrompt(a: Analysis, framing: string, setting: string) {
   return [
-    `Professional ${subject} photography for a vertical 4:5 Instagram card. Photorealistic.`,
+    "A realistic, unedited-looking photo of a real dish, vertical 4:5.",
     `Dish: ${a.dish_name_en} (${a.dish_name_ko}). ${a.dish_description_en}`,
-    `Keep the same kind of dish and these ingredients clearly visible: ${a.key_ingredients_en.join(", ")}. Do not add unrelated foods.`,
+    `Same ingredients, clearly visible: ${a.key_ingredients_en.join(", ")}. Do not add unrelated foods.`,
+    `Photo look to match (keep it the same): ${a.photo_look_en}.`,
+    `Change only composition and background: ${framing}; on ${setting}.`,
+    `(The reference was ${a.original_angle} on ${a.original_background_en} — use a different angle and background.)`,
+    "같은 요리·같은 재료는 유지하고, 구도·배경·배치(음식 위치/앵글)만 바꿔라.",
     "",
-    "This must be a completely NEW shot that looks clearly different from the reference at first glance. Be bold:",
-    `- Camera angle: ${ANGLES[angle]}. (The reference was ${a.original_angle} — do NOT use that angle.)`,
-    `- Plating / arrangement: ${a.alternative_plating_en}. (The reference was: ${a.original_composition_en} — do NOT copy it.)`,
-    `- Background / setting: ${background}. (The reference was: ${a.original_background_en} — do NOT reuse it.)`,
-    "원본의 요리 종류·재료는 유지하되 구도·배치·카메라 앵글·배경은 한눈에 다르게 과감하게 바꿔라.",
-    "",
-    deliciousRule(a.is_hot_dish),
+    REALISM_RULE,
     "",
     CLEAN_RULE,
   ].join("\n");
 }
 
-/** 편집(img2img) 방식 프롬프트 — 원본을 넣되 최대한 과감하게 바꾸라고 지시 */
-const EDIT_PROMPT = [
-  "Re-shoot the food from the input photo as a brand-new, professional photo for a vertical 4:5 Instagram card.",
-  "Keep the same kind of dish and the same ingredients, but make the result clearly different from the input at first glance. Be bold:",
-  "use a different camera angle, a different arrangement/plating, and a completely different background and table setting.",
-  "Do not preserve the input's framing or layout.",
-  "원본의 요리 종류·재료는 유지하되 구도·배치·카메라 앵글·배경은 한눈에 다르게 과감하게 바꿔라.",
-  "",
-  deliciousRule(true),
-  "",
-  CLEAN_RULE,
-].join("\n");
-
-/** 원본 사진이 없을 때(글만 있는 장) 글 내용으로 새로 만드는 프롬프트 */
+/** 원본 사진이 없을 때(글만 있는 장) 글 내용으로 만드는 프롬프트 */
 function textPrompt(topic: string) {
   return [
-    "A vertical 4:5 food photo for an Instagram card news slide. Photorealistic.",
+    "A realistic, unedited-looking everyday photo of the food described below, vertical 4:5, as if taken with a phone at a restaurant.",
     `Subject (Korean description, do NOT write it in the image): ${topic.slice(0, 300)}`,
-    `Camera angle: ${ANGLES[pick(ANGLE_KEYS)]}. Background: ${pick(BACKGROUNDS)}.`,
+    `Setting: ${pick(SETTINGS)}.`,
     "",
-    deliciousRule(true),
+    REALISM_RULE,
     "",
     CLEAN_RULE,
   ].join("\n");
@@ -174,8 +178,8 @@ function parseDataUrl(d: string): { type: string; data: Buffer } {
 }
 
 /**
- * 슬라이드 사진을 '같은 요리, 확실히 다른 구도·배경, 더 맛있어 보이는, 글자 없는' 새 사진으로 바꾼다.
- * 원본 사진이 없으면 슬라이드 글로 새로 만든다. 결과는 JPEG data URL.
+ * 슬라이드 사진을 '원본처럼 사실적이지만 구도·배경·배치만 바뀐, 글자 없는' 새 사진으로 바꾼다.
+ * 원본 사진이 없으면 슬라이드 글로 만든다. 결과는 JPEG data URL.
  */
 export async function remakeSlideImage({ image, title = "", body = "" }: ImageGenRequest): Promise<string> {
   const topic = `${title}\n${body}`.trim();
@@ -189,7 +193,7 @@ export async function remakeSlideImage({ image, title = "", body = "" }: ImageGe
     size: SIZE,
     quality: QUALITY,
     output_format: "jpeg" as const,
-    output_compression: 85,
+    output_compression: 90,
   };
   // 비용 보호: 이미지 생성은 실패해도 자동 재시도하지 않음
   const client = openai({ maxRetries: 0, timeout: 150_000 });
@@ -201,13 +205,15 @@ export async function remakeSlideImage({ image, title = "", body = "" }: ImageGe
     const analysis = MODE === "describe" ? await analyze(client, image!) : null;
     if (analysis) {
       const angle = pick(ANGLE_KEYS.filter((k) => k !== analysis.original_angle));
-      res = await client.images.generate({ ...common, prompt: buildDescribedPrompt(analysis, angle, pick(BACKGROUNDS)) });
+      res = await client.images.generate({
+        ...common,
+        prompt: describedPrompt(analysis, ANGLE_FRAMINGS[angle], pick(SETTINGS)),
+      });
     } else {
-      // 편집 방식 (설정했거나 분석이 실패했을 때)
       res = await client.images.edit({
         ...common,
         image: await toFile(source.data, `slide.${source.type.split("/")[1]}`, { type: source.type }),
-        prompt: EDIT_PROMPT,
+        prompt: editPrompt(pick(FRAMINGS), pick(SETTINGS)),
       });
     }
   }
