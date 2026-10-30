@@ -1,10 +1,12 @@
 "use client";
 
-import { useRef, useState } from "react";
-import { SlidePreview, TEMPLATES } from "./SlideCard";
+import { useEffect, useRef, useState } from "react";
+import { DEFAULT_WATERMARK, SlidePreview } from "./SlideCard";
 import { resizeImage } from "@/lib/client-images";
 import { downloadZip, renderSlides, triggerDownload } from "@/lib/export";
-import type { Slide, TemplateId } from "@/lib/types";
+import type { Slide } from "@/lib/types";
+
+const WATERMARK_KEY = "cardnews.watermark";
 
 // 2단계 기능 스위치 (빌드 시 값이 들어감)
 const IMAGE_GEN_ENABLED = process.env.NEXT_PUBLIC_ENABLE_IMAGE_GEN === "1";
@@ -19,7 +21,7 @@ type Props = {
 };
 
 export default function Editor({ slides, caption, onChangeSlides, onChangeCaption, onRemixAgain, onRestart }: Props) {
-  const [template, setTemplate] = useState<TemplateId>("clean");
+  const [watermark, setWatermark] = useState(DEFAULT_WATERMARK);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [results, setResults] = useState<string[] | null>(null);
@@ -27,6 +29,21 @@ export default function Editor({ slides, caption, onChangeSlides, onChangeCaptio
   const [genIndex, setGenIndex] = useState<number | null>(null);
   const nodes = useRef<(HTMLDivElement | null)[]>([]);
   const resultBlobs = useRef<Blob[]>([]);
+
+  // 워터마크 문구는 다음에 또 쓰도록 이 브라우저에 기억
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(WATERMARK_KEY);
+      if (saved !== null) setWatermark(saved);
+    } catch {}
+  }, []);
+  const changeWatermark = (v: string) => {
+    setWatermark(v);
+    setResults(null);
+    try {
+      localStorage.setItem(WATERMARK_KEY, v);
+    } catch {}
+  };
 
   const update = (i: number, patch: Partial<Slide>) => {
     onChangeSlides(slides.map((s, j) => (j === i ? { ...s, ...patch } : s)));
@@ -92,96 +109,92 @@ export default function Editor({ slides, caption, onChangeSlides, onChangeCaptio
   return (
     <div>
       <h1>각색이 끝났어요!</h1>
-      <p className="lead">글을 읽어 보고, 고치고 싶은 곳은 칸을 눌러 직접 고치세요. 다 됐으면 맨 아래 초록 버튼을 누르세요.</p>
+      <p className="lead">장마다 사진과 글을 확인하고, 고치고 싶은 곳은 직접 고치세요. 다 됐으면 맨 아래 초록 버튼을 누르세요.</p>
 
       {error && <div className="notice notice-error" role="alert">{error}</div>}
 
       <section className="card">
-        <h2>① 디자인 고르기</h2>
-        <div className="template-grid">
-          {TEMPLATES.map((t) => (
-            <button
-              key={t.id}
-              className="template-option"
-              style={t.swatch}
-              aria-pressed={template === t.id}
-              onClick={() => { setTemplate(t.id); setResults(null); }}
-            >
-              {template === t.id ? "✓ " : ""}{t.name}
-            </button>
-          ))}
-        </div>
+        <h2>① 워터마크 문구</h2>
+        <label className="field-label" htmlFor="watermark">모든 장 맨 아래 가운데에 들어가는 글씨예요</label>
+        <input
+          id="watermark"
+          type="text"
+          value={watermark}
+          onChange={(e) => changeWatermark(e.target.value)}
+          placeholder="예) 맛집도둑 (비우면 워터마크 없음)"
+          autoComplete="off"
+        />
       </section>
 
-      <h2 style={{ marginTop: 40 }}>② 장마다 글 확인하기</h2>
+      <h2 style={{ marginTop: 40 }}>② 장마다 사진·글 확인하기</h2>
       <div className="slide-editor">
-        {slides.map((s, i) => (
-          <section className="card" key={i}>
-            <span className="slide-num">{i + 1}번째 장</span>
-            <SlidePreview
-              ref={(el) => { nodes.current[i] = el; }}
-              slide={s}
-              index={i}
-              total={slides.length}
-              template={template}
-            />
+        {slides.map((s, i) => {
+          const cover = i === 0;
+          const field = cover ? "title" : "body";
+          return (
+            <section className="card" key={i}>
+              <span className="slide-num">{i + 1}번 장{cover ? " · 표지" : ""}</span>
+              <SlidePreview
+                ref={(el) => { nodes.current[i] = el; }}
+                slide={s}
+                index={i}
+                watermark={watermark}
+              />
 
-            <div className="stack" style={{ marginTop: 24 }}>
-              <div>
-                <label className="field-label" htmlFor={`t${i}`}>큰 제목</label>
-                <textarea
-                  id={`t${i}`}
-                  rows={2}
-                  style={{ minHeight: 0 }}
-                  value={s.title}
-                  onChange={(e) => update(i, { title: e.target.value })}
-                />
-              </div>
-              <div>
-                <label className="field-label" htmlFor={`b${i}`}>설명 글</label>
-                <textarea id={`b${i}`} rows={4} value={s.body} onChange={(e) => update(i, { body: e.target.value })} />
-              </div>
-
-              <div className="row">
-                <label className="btn btn-secondary" style={{ flex: "1 1 200px" }}>
-                  🖼️ 사진 바꾸기
-                  <input
-                    type="file"
-                    accept="image/*"
-                    hidden
-                    onChange={(e) => { replaceImage(i, e.target.files?.[0]); e.target.value = ""; }}
+              <div className="stack" style={{ marginTop: 24 }}>
+                <div>
+                  <label className="field-label" htmlFor={`text${i}`}>
+                    {cover ? "표지 제목" : "본문"} <span className="muted small">(줄을 바꾸면 사진에서도 줄이 바뀌어요)</span>
+                  </label>
+                  <textarea
+                    id={`text${i}`}
+                    rows={cover ? 3 : 4}
+                    value={s[field]}
+                    onChange={(e) => update(i, { [field]: e.target.value })}
                   />
-                </label>
-                {s.image && (
-                  <button className="btn btn-secondary" onClick={() => update(i, { image: null })}>
-                    사진 빼기
-                  </button>
-                )}
-                {/* 2단계: AI로 슬라이드 배경 사진 새로 만들기 (NEXT_PUBLIC_ENABLE_IMAGE_GEN=1 일 때만) */}
-                {IMAGE_GEN_ENABLED ? (
-                  <button
-                    className="btn btn-secondary"
-                    onClick={() => generateImage(i)}
-                    disabled={genIndex !== null || !!busy}
-                  >
-                    {genIndex === i ? "사진 만드는 중… (30초쯤)" : "✨ AI 새 사진 만들기"}
-                  </button>
-                ) : (
-                  <button className="btn btn-secondary" disabled title="다음 업데이트에서 제공돼요">
-                    ✨ AI 새 사진 (준비 중)
-                  </button>
+                </div>
+
+                <div className="row">
+                  <label className="btn btn-secondary" style={{ flex: "1 1 200px" }}>
+                    🖼️ 사진 바꾸기
+                    <input
+                      type="file"
+                      accept="image/*"
+                      hidden
+                      onChange={(e) => { replaceImage(i, e.target.files?.[0]); e.target.value = ""; }}
+                    />
+                  </label>
+                  {s.image && (
+                    <button className="btn btn-secondary" onClick={() => update(i, { image: null })}>
+                      사진 빼기
+                    </button>
+                  )}
+                  {/* 2단계: AI로 슬라이드 배경 사진 새로 만들기 (NEXT_PUBLIC_ENABLE_IMAGE_GEN=1 일 때만) */}
+                  {IMAGE_GEN_ENABLED ? (
+                    <button
+                      className="btn btn-secondary"
+                      onClick={() => generateImage(i)}
+                      disabled={genIndex !== null || !!busy}
+                    >
+                      {genIndex === i ? "사진 만드는 중… (30초쯤)" : "✨ AI 새 사진 만들기"}
+                    </button>
+                  ) : (
+                    <button className="btn btn-secondary" disabled title="다음 업데이트에서 제공돼요">
+                      ✨ AI 새 사진 (준비 중)
+                    </button>
+                  )}
+                </div>
+
+                {s.original && (
+                  <details>
+                    <summary className="muted" style={{ cursor: "pointer", padding: "8px 0" }}>원본 글 보기</summary>
+                    <div className="original-text">{s.original}</div>
+                  </details>
                 )}
               </div>
-
-              {s.original && (
-                <details>
-                  <summary className="muted" style={{ cursor: "pointer", padding: "8px 0" }}>원본 글 보기</summary>
-                  <div className="original-text">{s.original}</div>
-                </details>
-              )}
-            </div>
-          </section>
-        ))}
+            </section>
+          );
+        })}
       </div>
 
       <section className="card" style={{ marginTop: 40 }}>

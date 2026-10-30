@@ -1,13 +1,6 @@
 import type { Metadata, Viewport } from "next";
-import localFont from "next/font/local";
 import "./globals.css";
-
-const pretendard = localFont({
-  src: "./fonts/PretendardVariable.woff2",
-  weight: "100 900",
-  display: "swap",
-  variable: "--font-pretendard",
-});
+import { jua, pretendard } from "@/lib/fonts";
 
 export const metadata: Metadata = {
   title: "카드뉴스 각색기",
@@ -21,7 +14,7 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="ko" className={pretendard.variable}>
+    <html lang="ko" className={`${pretendard.variable} ${jua.variable}`}>
       <body>{children}</body>
     </html>
   );

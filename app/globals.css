@@ -162,24 +162,6 @@ textarea { resize: vertical; min-height: 120px; line-height: 1.55; }
   white-space: pre-wrap;
 }
 
-/* 템플릿 선택 */
-.template-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-  gap: 12px;
-}
-.template-option {
-  font: inherit;
-  font-weight: 700;
-  font-size: 1.05rem;
-  min-height: 72px;
-  border-radius: 14px;
-  border: 3px solid var(--line);
-  cursor: pointer;
-  padding: 10px;
-}
-.template-option[aria-pressed="true"] { border-color: var(--primary); box-shadow: 0 0 0 3px #c3d3ff; }
-
 /* 업로드 썸네일 */
 .thumbs { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 10px; }
 .thumb { position: relative; aspect-ratio: 4 / 5; border-radius: 10px; overflow: hidden; background: #eee; }

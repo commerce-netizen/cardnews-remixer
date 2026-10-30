@@ -7,8 +7,6 @@ export type Slide = {
   body: string;
 };
 
-export type TemplateId = "clean" | "overlay" | "accent" | "note";
-
 export type ExtractResult = {
   imageUrls: string[];
   caption: string;
