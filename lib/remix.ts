@@ -1,7 +1,10 @@
-import Anthropic from "@anthropic-ai/sdk";
-import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
+import OpenAI from "openai";
+import { zodTextFormat } from "openai/helpers/zod";
+import type { ResponseInputContent } from "openai/resources/responses/responses";
 import { z } from "zod";
+import { UserFacingError } from "./errors";
 import { fetchCdnImage } from "./instagram";
+import { isMockMode, openai, TEXT_MODEL } from "./openai";
 import type { RemixRequest, RemixResult } from "./types";
 
 export const DISCLOSURE =
@@ -9,8 +12,7 @@ export const DISCLOSURE =
 
 const MAX_IMAGES = 10;
 
-/** 사용자에게 그대로 보여줄 수 있는 한글 오류 */
-export class RemixError extends Error {}
+class RemixError extends UserFacingError {}
 
 const ResultSchema = z.object({
   slides: z.array(
@@ -41,43 +43,30 @@ const SYSTEM = `당신은 쿠팡 파트너스 제휴 마케터를 돕는 인스�
 - caption은 원본 캡션을 같은 원칙으로 각색하고, 관련 해시태그 5~10개를 끝에 붙입니다. 원본 캡션이 없으면 슬라이드 내용으로 새로 씁니다.
 - 쿠팡 파트너스 고지 문구는 따로 붙이니 caption에 넣지 마세요.`;
 
-type ImageBlock = Anthropic.ImageBlockParam;
 type MediaType = "image/jpeg" | "image/png" | "image/gif" | "image/webp";
 
 function asMediaType(t: string): MediaType {
   return (["image/png", "image/gif", "image/webp"] as const).find((x) => t.startsWith(x)) ?? "image/jpeg";
 }
 
-async function toImageBlocks(req: RemixRequest): Promise<ImageBlock[]> {
+/** 슬라이드 이미지를 data URL 목록으로 (인스타 이미지는 서버가 내려받아 변환) */
+async function toDataUrls(req: RemixRequest): Promise<string[]> {
   if (req.imageDataUrls?.length) {
     return req.imageDataUrls.slice(0, MAX_IMAGES).map((d) => {
-      const m = d.match(/^data:(image\/[a-z+]+);base64,(.+)$/);
-      if (!m) throw new RemixError("이미지 형식이 올바르지 않아요.");
-      return {
-        type: "image",
-        source: { type: "base64", media_type: asMediaType(m[1]), data: m[2] },
-      };
+      if (!/^data:image\/[a-z+]+;base64,/.test(d)) throw new RemixError("이미지 형식이 올바르지 않아요.");
+      return d;
     });
   }
   if (req.imageUrls?.length) {
     return Promise.all(
       req.imageUrls.slice(0, MAX_IMAGES).map(async (u) => {
         const { data, type } = await fetchCdnImage(u);
-        return {
-          type: "image" as const,
-          source: {
-            type: "base64" as const,
-            media_type: asMediaType(type),
-            data: Buffer.from(data).toString("base64"),
-          },
-        };
+        return `data:${asMediaType(type)};base64,${Buffer.from(data).toString("base64")}`;
       }),
     );
   }
   return [];
 }
-
-export const isMockMode = () => process.env.MOCK_LLM === "1";
 
 /** 데모 모드(MOCK_LLM=1): AI 키 없이 화면 흐름을 확인하기 위한 가짜 각색 결과 */
 function mockRemix(req: RemixRequest): RemixResult {
@@ -100,39 +89,51 @@ export async function remix(req: RemixRequest): Promise<RemixResult> {
     throw new RemixError("각색할 슬라이드 이미지나 원문 글이 필요해요.");
   }
   if (isMockMode()) return mockRemix(req);
-  const images = await toImageBlocks(req);
+  const images = await toDataUrls(req);
 
-  const content: Anthropic.ContentBlockParam[] = [];
-  images.forEach((img, i) => {
-    content.push({ type: "text", text: `[슬라이드 ${i + 1}]` }, img);
+  const content: ResponseInputContent[] = [];
+  images.forEach((url, i) => {
+    // 카드뉴스 속 작은 한글까지 읽도록 high (gpt-5-mini 입력 단가가 낮아 4장 기준 비용 미미)
+    content.push({ type: "input_text", text: `[슬라이드 ${i + 1}]` }, { type: "input_image", image_url: url, detail: "high" });
   });
   const parts = [
     images.length ? `위 슬라이드 이미지 ${images.length}장을 순서대로 각색해 주세요.` : "",
     slideText ? `<원본_슬라이드_글>\n${slideText}\n</원본_슬라이드_글>` : "",
     caption ? `<원본_캡션>\n${caption}\n</원본_캡션>` : "<원본_캡션>없음</원본_캡션>",
   ];
-  content.push({ type: "text", text: parts.filter(Boolean).join("\n\n") });
+  content.push({ type: "input_text", text: parts.filter(Boolean).join("\n\n") });
 
-  const client = new Anthropic();
-  const response = await client.messages
-    .parse({
-      model: process.env.LLM_MODEL || "claude-opus-5-5",
-      max_tokens: 16000,
-      system: SYSTEM,
-      output_config: { effort: "medium", format: zodOutputFormat(ResultSchema) },
-      messages: [{ role: "user", content }],
-    })
-    .catch((e) => {
-      if (e instanceof Anthropic.APIError) throw e;
-      // 응답이 잘렸거나(max_tokens) JSON이 깨진 경우
-      console.error("[remix] 응답 해석 실패", e);
-      throw new RemixError("각색 결과를 만들지 못했어요. 다시 한 번 눌러 주세요.");
-    });
+  const response = await openai().responses.parse({
+    model: TEXT_MODEL,
+    instructions: SYSTEM,
+    input: [{ role: "user", content }],
+    text: { format: zodTextFormat(ResultSchema, "cardnews_remix") },
+    // 저비용: 생각은 짧게, 출력 길이 상한 (추론 토큰 포함)
+    reasoning: { effort: "low" },
+    max_output_tokens: 8000,
+    store: false,
+  }).catch((e) => {
+    if (e instanceof OpenAI.APIError) throw e;
+    // 응답이 잘렸거나 JSON이 깨진 경우
+    console.error("[remix] 응답 해석 실패", e);
+    throw new RemixError("각색 결과를 만들지 못했어요. 다시 한 번 눌러 주세요.");
+  });
 
-  if (response.stop_reason === "refusal") {
+  if (response.status === "incomplete") {
+    console.error("[remix] 응답 미완료", response.incomplete_details);
+    throw new RemixError(
+      response.incomplete_details?.reason === "content_filter"
+        ? "이 내용은 AI가 각색을 거절했어요. 다른 게시물로 시도해 주세요."
+        : "각색 결과를 만들지 못했어요. 다시 한 번 눌러 주세요.",
+    );
+  }
+  const refused = response.output.some(
+    (o) => o.type === "message" && o.content.some((c) => c.type === "refusal"),
+  );
+  if (refused) {
     throw new RemixError("이 내용은 AI가 각색을 거절했어요. 다른 게시물로 시도해 주세요.");
   }
-  const out = response.parsed_output;
+  const out = response.output_parsed;
   if (!out || !out.slides.length) {
     throw new RemixError("각색 결과를 만들지 못했어요. 다시 한 번 눌러 주세요.");
   }

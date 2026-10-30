@@ -6,6 +6,9 @@ import { resizeImage } from "@/lib/client-images";
 import { downloadZip, renderSlides, triggerDownload } from "@/lib/export";
 import type { Slide, TemplateId } from "@/lib/types";
 
+// 2단계 기능 스위치 (빌드 시 값이 들어감)
+const IMAGE_GEN_ENABLED = process.env.NEXT_PUBLIC_ENABLE_IMAGE_GEN === "1";
+
 type Props = {
   slides: Slide[];
   caption: string;
@@ -21,6 +24,7 @@ export default function Editor({ slides, caption, onChangeSlides, onChangeCaptio
   const [error, setError] = useState<string | null>(null);
   const [results, setResults] = useState<string[] | null>(null);
   const [copied, setCopied] = useState(false);
+  const [genIndex, setGenIndex] = useState<number | null>(null);
   const nodes = useRef<(HTMLDivElement | null)[]>([]);
   const resultBlobs = useRef<Blob[]>([]);
 
@@ -35,6 +39,26 @@ export default function Editor({ slides, caption, onChangeSlides, onChangeCaptio
       update(i, { image: await resizeImage(file, 1600, 0.9) });
     } catch (e) {
       setError((e as Error).message);
+    }
+  };
+
+  const generateImage = async (i: number) => {
+    setError(null);
+    setGenIndex(i);
+    try {
+      const res = await fetch("/api/image-gen", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title: slides[i].title, body: slides[i].body }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.image) throw new Error(data.error || "사진을 만들지 못했어요.");
+      update(i, { image: data.image });
+    } catch (e) {
+      setError((e as Error).message);
+      window.scrollTo(0, 0);
+    } finally {
+      setGenIndex(null);
     }
   };
 
@@ -133,10 +157,20 @@ export default function Editor({ slides, caption, onChangeSlides, onChangeCaptio
                     사진 빼기
                   </button>
                 )}
-                {/* 2단계: AI로 슬라이드 이미지 새로 만들기 */}
-                <button className="btn btn-secondary" disabled title="다음 업데이트에서 제공돼요">
-                  ✨ AI 새 사진 (준비 중)
-                </button>
+                {/* 2단계: AI로 슬라이드 배경 사진 새로 만들기 (NEXT_PUBLIC_ENABLE_IMAGE_GEN=1 일 때만) */}
+                {IMAGE_GEN_ENABLED ? (
+                  <button
+                    className="btn btn-secondary"
+                    onClick={() => generateImage(i)}
+                    disabled={genIndex !== null || !!busy}
+                  >
+                    {genIndex === i ? "사진 만드는 중… (30초쯤)" : "✨ AI 새 사진 만들기"}
+                  </button>
+                ) : (
+                  <button className="btn btn-secondary" disabled title="다음 업데이트에서 제공돼요">
+                    ✨ AI 새 사진 (준비 중)
+                  </button>
+                )}
               </div>
 
               {s.original && (
@@ -188,7 +222,7 @@ export default function Editor({ slides, caption, onChangeSlides, onChangeCaptio
 
       <div className="approve-bar">
         <div className="inner">
-          <button className="btn btn-ok btn-huge" onClick={approve} disabled={!!busy}>
+          <button className="btn btn-ok btn-huge" onClick={approve} disabled={!!busy || genIndex !== null}>
             {busy ?? "✅ 승인하고 내려받기"}
           </button>
         </div>

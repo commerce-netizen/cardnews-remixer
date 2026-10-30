@@ -13,7 +13,7 @@ const BASE = `http://127.0.0.1:${PORT}`;
 
 (async () => {
   const app = spawn("npx", ["next", "start", "-p", String(PORT)], {
-    env: { ...process.env, MOCK_LLM: "1" },
+    env: { ...process.env, MOCK_LLM: "1", OPENAI_API_KEY: "" },
     stdio: "ignore",
     detached: true,
   });
@@ -57,6 +57,19 @@ const BASE = `http://127.0.0.1:${PORT}`;
     await page.fill("#t0", "직접 고친 제목");
     assert.ok(await page.locator(".preview-frame >> nth=0").getByText("직접 고친 제목").isVisible());
     console.log("✓ 템플릿 변경·텍스트 수정이 미리보기에 반영");
+
+    // 2단계 AI 사진 만들기 (NEXT_PUBLIC_ENABLE_IMAGE_GEN=1 로 빌드했을 때만 버튼이 켜짐)
+    const genBtn = page.locator("button:has-text('AI 새 사진 만들기')").first();
+    if (await genBtn.count()) {
+      await genBtn.click();
+      await page.waitForFunction(() =>
+        document.querySelector(".preview-frame img")?.getAttribute("src")?.startsWith("data:image/svg+xml"),
+      );
+      console.log("✓ AI 새 사진 만들기(데모)가 1번째 장에 반영");
+    } else {
+      assert.ok(await page.isVisible("text=AI 새 사진 (준비 중)"));
+      console.log("✓ AI 새 사진 버튼은 '준비 중'으로 꺼져 있음 (기능 스위치 꺼짐)");
+    }
 
     const download = page.waitForEvent("download");
     await page.click("text=승인하고 내려받기");

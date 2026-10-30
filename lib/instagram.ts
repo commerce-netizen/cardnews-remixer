@@ -1,3 +1,4 @@
+import { UserFacingError } from "./errors";
 import type { ExtractResult } from "./types";
 
 const UA =
@@ -5,8 +6,7 @@ const UA =
 const IG_APP_ID = "936619743392459";
 const DEFAULT_DOC_ID = "8845758582119845";
 
-/** 사용자에게 그대로 보여줄 수 있는 한글 오류 */
-export class ExtractError extends Error {}
+export class ExtractError extends UserFacingError {}
 
 export function parseShortcode(input: string): string {
   const trimmed = input.trim();

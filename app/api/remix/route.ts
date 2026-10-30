@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
-import Anthropic from "@anthropic-ai/sdk";
-import { ExtractError } from "@/lib/instagram";
-import { isMockMode, remix, RemixError } from "@/lib/remix";
+import { friendlyError, hasApiKey, isMockMode } from "@/lib/openai";
+import { remix } from "@/lib/remix";
 import type { RemixRequest } from "@/lib/types";
 
 export const runtime = "nodejs";
@@ -9,9 +8,9 @@ export const runtime = "nodejs";
 export const maxDuration = 120;
 
 export async function POST(req: Request) {
-  if (!process.env.ANTHROPIC_API_KEY && !isMockMode()) {
+  if (!hasApiKey() && !isMockMode()) {
     return NextResponse.json(
-      { error: "AI 키가 설정되지 않았어요. 관리자에게 ANTHROPIC_API_KEY 설정을 요청해 주세요." },
+      { error: "AI 키가 설정되지 않았어요. 관리자에게 OPENAI_API_KEY 설정을 요청해 주세요." },
       { status: 500 },
     );
   }
@@ -22,16 +21,6 @@ export async function POST(req: Request) {
     return NextResponse.json(await remix(body));
   } catch (e) {
     console.error("[remix]", e);
-    let message = "각색 중 문제가 생겼어요. 잠시 뒤 다시 눌러 주세요.";
-    if (e instanceof RemixError || e instanceof ExtractError) {
-      message = e.message;
-    } else if (e instanceof Anthropic.RateLimitError) {
-      message = "지금 사용하는 사람이 많아요. 1분 뒤에 다시 눌러 주세요.";
-    } else if (e instanceof Anthropic.AuthenticationError) {
-      message = "AI 키가 올바르지 않아요. 관리자에게 알려 주세요.";
-    } else if (e instanceof Anthropic.APIError) {
-      message = "AI 서버와 연결이 잠깐 끊겼어요. 잠시 뒤 다시 눌러 주세요.";
-    }
-    return NextResponse.json({ error: message }, { status: 502 });
+    return NextResponse.json({ error: friendlyError(e) }, { status: 502 });
   }
 }
