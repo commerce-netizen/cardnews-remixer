@@ -176,6 +176,10 @@ try {
       assert.ok(ins.includes("존댓말 '~요'체"), "캡션 존댓말 톤");
       assert.ok(ins.includes("정확히 3문장"), "캡션 3문장 규칙");
       assert.ok(/CTA 문구·해시태그·쿠팡 파트너스 고지는 넣지 마세요/.test(ins), "캡션에 CTA·고지 금지");
+      assert.ok(ins.includes("세 줄에 같은 단어를 반복하지 마세요"), "표지 단어 중복 금지");
+      assert.ok(ins.includes("3번째 줄은 선언형으로 끝냅니다"), "표지 마무리 선언형");
+      assert.ok(ins.includes("원본에 없는 재료·분량·비율·온도·시간을 지어내지 마세요"), "레시피 수치 날조 금지");
+      assert.ok(ins.includes("미지근한 표현 금지"), "미지근한 표현 금지");
     }],
     ["사진 글씨 읽기(vision) 요청 형식", () => remix("CASE:ok", { imageDataUrls: [tinyJpeg, tinyJpeg] }), (r) => {
       assert.equal(r.status, 200);
