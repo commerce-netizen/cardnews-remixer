@@ -1,20 +1,20 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { DEFAULT_WATERMARK, SlidePreview } from "./SlideCard";
-import { resizeImage } from "@/lib/client-images";
+import { useEffect, useRef, useState, type Dispatch, type SetStateAction } from "react";
+import { DEFAULT_WATERMARK, SLIDE_H, SLIDE_W, SlidePreview } from "./SlideCard";
+import { coverCrop, resizeImage } from "@/lib/client-images";
 import { downloadZip, renderSlides, triggerDownload } from "@/lib/export";
 import type { Slide } from "@/lib/types";
 
 const WATERMARK_KEY = "cardnews.watermark";
 
-// 2단계 기능 스위치 (빌드 시 값이 들어감)
-const IMAGE_GEN_ENABLED = process.env.NEXT_PUBLIC_ENABLE_IMAGE_GEN === "1";
+// 'AI 새 사진' 기능 스위치 (빌드 시 값이 들어감). 기본 켜짐, "0"이면 끔
+const IMAGE_GEN_ENABLED = process.env.NEXT_PUBLIC_ENABLE_IMAGE_GEN !== "0";
 
 type Props = {
   slides: Slide[];
   caption: string;
-  onChangeSlides: (s: Slide[]) => void;
+  onChangeSlides: Dispatch<SetStateAction<Slide[]>>;
   onChangeCaption: (c: string) => void;
   onRemixAgain: () => void;
   onRestart: () => void;
@@ -27,6 +27,8 @@ export default function Editor({ slides, caption, onChangeSlides, onChangeCaptio
   const [results, setResults] = useState<string[] | null>(null);
   const [copied, setCopied] = useState(false);
   const [genIndex, setGenIndex] = useState<number | null>(null);
+  // AI 새 사진으로 바꾸기 전 사진 (되돌리기용)
+  const [prevImages, setPrevImages] = useState<Record<number, string | null>>({});
   const nodes = useRef<(HTMLDivElement | null)[]>([]);
   const resultBlobs = useRef<Blob[]>([]);
 
@@ -46,14 +48,23 @@ export default function Editor({ slides, caption, onChangeSlides, onChangeCaptio
   };
 
   const update = (i: number, patch: Partial<Slide>) => {
-    onChangeSlides(slides.map((s, j) => (j === i ? { ...s, ...patch } : s)));
+    // 사진 생성처럼 오래 걸리는 작업 중에 고친 글이 덮어써지지 않도록 항상 최신 상태에 적용
+    onChangeSlides((prev) => prev.map((s, j) => (j === i ? { ...s, ...patch } : s)));
     setResults(null);
   };
+
+  const forgetPrev = (i: number) =>
+    setPrevImages((p) => {
+      const next = { ...p };
+      delete next[i];
+      return next;
+    });
 
   const replaceImage = async (i: number, file?: File) => {
     if (!file) return;
     try {
       update(i, { image: await resizeImage(file, 1600, 0.9) });
+      forgetPrev(i);
     } catch (e) {
       setError((e as Error).message);
     }
@@ -62,21 +73,31 @@ export default function Editor({ slides, caption, onChangeSlides, onChangeCaptio
   const generateImage = async (i: number) => {
     setError(null);
     setGenIndex(i);
+    const current = slides[i].image;
     try {
+      // 지금 사진(인스타 원본·업로드·이전 AI 사진)을 적당한 크기의 JPEG로 바꿔 보냄
+      const source = current ? await resizeImage(current, 1536, 0.85) : null;
       const res = await fetch("/api/image-gen", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title: slides[i].title, body: slides[i].body }),
+        body: JSON.stringify({ image: source, title: slides[i].title, body: slides[i].body }),
       });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok || !data.image) throw new Error(data.error || "사진을 만들지 못했어요.");
-      update(i, { image: data.image });
+      if (!res.ok || !data.image) throw new Error(data.error || "새 사진을 만들지 못했어요. 다시 한 번 눌러 주세요.");
+      const image = await coverCrop(data.image, SLIDE_W, SLIDE_H);
+      setPrevImages((p) => ({ ...p, [i]: current }));
+      update(i, { image });
     } catch (e) {
-      setError((e as Error).message);
+      setError(`${i + 1}번 장: ${(e as Error).message}`);
       window.scrollTo(0, 0);
     } finally {
       setGenIndex(null);
     }
+  };
+
+  const undoImage = (i: number) => {
+    update(i, { image: prevImages[i] ?? null });
+    forgetPrev(i);
   };
 
   const copyCaption = async () => {
@@ -139,6 +160,14 @@ export default function Editor({ slides, caption, onChangeSlides, onChangeCaptio
                 slide={s}
                 index={i}
                 watermark={watermark}
+                overlay={
+                  genIndex === i && (
+                    <div className="preview-overlay" role="status">
+                      <div className="spinner" />
+                      <p>AI가 새 사진을 만드는 중이에요<br />최대 1분쯤 걸려요</p>
+                    </div>
+                  )
+                }
               />
 
               <div className="stack" style={{ marginTop: 24 }}>
@@ -165,22 +194,23 @@ export default function Editor({ slides, caption, onChangeSlides, onChangeCaptio
                     />
                   </label>
                   {s.image && (
-                    <button className="btn btn-secondary" onClick={() => update(i, { image: null })}>
+                    <button className="btn btn-secondary" onClick={() => { update(i, { image: null }); forgetPrev(i); }}>
                       사진 빼기
                     </button>
                   )}
-                  {/* 2단계: AI로 슬라이드 배경 사진 새로 만들기 (NEXT_PUBLIC_ENABLE_IMAGE_GEN=1 일 때만) */}
-                  {IMAGE_GEN_ENABLED ? (
+                  {/* AI 새 사진: 이 장의 사진을 같은 음식·다른 구도로 다시 만듦 (버튼을 누를 때만 1장씩 — 비용 보호) */}
+                  {IMAGE_GEN_ENABLED && (
                     <button
                       className="btn btn-secondary"
                       onClick={() => generateImage(i)}
                       disabled={genIndex !== null || !!busy}
                     >
-                      {genIndex === i ? "사진 만드는 중… (30초쯤)" : "✨ AI 새 사진 만들기"}
+                      {genIndex === i ? "새 사진 만드는 중…" : "✨ AI 새 사진"}
                     </button>
-                  ) : (
-                    <button className="btn btn-secondary" disabled title="다음 업데이트에서 제공돼요">
-                      ✨ AI 새 사진 (준비 중)
+                  )}
+                  {i in prevImages && genIndex !== i && (
+                    <button className="btn btn-secondary" onClick={() => undoImage(i)} disabled={!!busy}>
+                      ↩ 이전 사진으로
                     </button>
                   )}
                 </div>

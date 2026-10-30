@@ -1,6 +1,6 @@
 "use client";
 
-import { forwardRef, useEffect, useRef, useState, type CSSProperties } from "react";
+import { forwardRef, useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { jua, pretendard } from "@/lib/fonts";
 import type { Slide } from "@/lib/types";
 
@@ -184,7 +184,10 @@ export const SlideCanvas = forwardRef<HTMLDivElement, Props>(function SlideCanva
 });
 
 /** 화면 폭에 맞춰 축소해 보여주는 미리보기 */
-export const SlidePreview = forwardRef<HTMLDivElement, Props>(function SlidePreview(props, ref) {
+export const SlidePreview = forwardRef<HTMLDivElement, Props & { overlay?: ReactNode }>(function SlidePreview(
+  { overlay, ...props },
+  ref,
+) {
   const box = useRef<HTMLDivElement>(null);
   const [scale, setScale] = useState(0.4);
 
@@ -201,6 +204,8 @@ export const SlidePreview = forwardRef<HTMLDivElement, Props>(function SlidePrev
       <div style={{ transform: `scale(${scale})`, transformOrigin: "top left", width: SLIDE_W, height: SLIDE_H }}>
         <SlideCanvas ref={ref} {...props} />
       </div>
+      {/* 화면에만 보이는 덧씌움(로딩 표시 등) — PNG 저장에는 들어가지 않음 */}
+      {overlay}
     </div>
   );
 });

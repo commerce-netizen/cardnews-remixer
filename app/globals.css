@@ -188,3 +188,21 @@ textarea { resize: vertical; min-height: 120px; line-height: 1.55; }
   .page { padding: 28px 16px 140px; }
   .card { padding: 22px 16px; }
 }
+
+/* AI 새 사진 만드는 중 표시 (미리보기 위) */
+.preview-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.6);
+  color: #fff;
+  text-align: center;
+  font-weight: 700;
+  font-size: 1.1rem;
+  padding: 20px;
+}
+.preview-overlay .spinner { width: 56px; height: 56px; border-width: 7px; margin-bottom: 16px; }
+.preview-overlay p { margin: 0; }

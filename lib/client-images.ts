@@ -36,3 +36,22 @@ export async function prepareImages(files: File[]): Promise<PreparedImage[]> {
   }
   return out;
 }
+
+/** 사진을 정확히 width×height로 꽉 차게(가운데 기준) 잘라 JPEG data URL로 만든다. */
+export async function coverCrop(src: string, width: number, height: number, quality = 0.9): Promise<string> {
+  const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+    const el = new Image();
+    el.onload = () => resolve(el);
+    el.onerror = () => reject(new Error("새 사진을 열 수 없어요. 다시 한 번 눌러 주세요."));
+    el.src = src;
+  });
+  const w = img.naturalWidth || width;
+  const h = img.naturalHeight || height;
+  const scale = Math.max(width / w, height / h);
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext("2d")!;
+  ctx.drawImage(img, (width - w * scale) / 2, (height - h * scale) / 2, w * scale, h * scale);
+  return canvas.toDataURL("image/jpeg", quality);
+}
