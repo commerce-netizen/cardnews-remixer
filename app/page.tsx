@@ -48,12 +48,17 @@ export default function Home() {
       const r = await postJson<RemixResult>("/api/remix", src.request);
       const n = Math.max(r.slides.length, src.images.length);
       setSlides(
-        Array.from({ length: n }, (_, i) => ({
-          image: src.images[i] ?? null,
-          original: r.slides[i]?.original ?? "",
-          title: r.slides[i]?.title ?? "",
-          body: r.slides[i]?.body ?? "",
-        })),
+        Array.from({ length: n }, (_, i) => {
+          const title = r.slides[i]?.title?.trim() ?? "";
+          const body = r.slides[i]?.body?.trim() ?? "";
+          // 디자인 틀: 1번 장은 제목만, 2번 장부터는 본문만 보인다. AI가 칸을 잘못 채워도 글이 사라지지 않게 합친다.
+          return {
+            image: src.images[i] ?? null,
+            original: r.slides[i]?.original ?? "",
+            title: i === 0 ? title || body : title,
+            body: i === 0 ? body : body || title,
+          };
+        }),
       );
       setCaption(r.caption);
       setSource(src);

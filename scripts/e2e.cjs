@@ -53,10 +53,28 @@ const BASE = `http://127.0.0.1:${PORT}`;
     assert.equal(await page.locator(".preview-frame").count(), 3);
     console.log("✓ 사진 3장 → 슬라이드 3장 각색(데모)");
 
-    await page.click("button:has-text('노란 포인트')");
-    await page.fill("#t0", "직접 고친 제목");
-    assert.ok(await page.locator(".preview-frame >> nth=0").getByText("직접 고친 제목").isVisible());
-    console.log("✓ 템플릿 변경·텍스트 수정이 미리보기에 반영");
+    // 장마다 카드: 1번 장=표지 제목, 2번 장부터=본문
+    assert.ok(await page.isVisible("text=1번 장 · 표지"));
+    assert.ok(await page.isVisible("text=3번 장"));
+    await page.fill("#text0", "직접 고친\n표지 제목");
+    await page.fill("#text1", "직접 고친 본문");
+    await page.fill("#watermark", "우리가게");
+    const first = page.locator(".preview-frame >> nth=0");
+    assert.ok(await first.getByText("직접 고친").isVisible());
+    assert.ok(await first.getByText("[광고]").isVisible());
+    assert.ok(await first.getByText("우리가게").isVisible());
+    assert.ok(await page.locator(".preview-frame >> nth=1").getByText("직접 고친 본문").isVisible());
+    assert.equal(await page.locator(".preview-frame", { hasText: "우리가게" }).count(), 3);
+    console.log("✓ 제목·본문·워터마크 수정이 모든 장 미리보기에 반영");
+
+    // 장별 사진 바꾸기
+    const before = await page.locator(".preview-frame >> nth=1").locator("img").getAttribute("src");
+    await page.locator(".card", { hasText: "2번 장" }).locator("input[type=file]").setInputFiles(files[0]);
+    await page.waitForFunction(
+      (b) => document.querySelectorAll(".preview-frame")[1].querySelector("img")?.getAttribute("src") !== b,
+      before,
+    );
+    console.log("✓ 2번 장 사진 교체");
 
     // 2단계 AI 사진 만들기 (NEXT_PUBLIC_ENABLE_IMAGE_GEN=1 로 빌드했을 때만 버튼이 켜짐)
     const genBtn = page.locator("button:has-text('AI 새 사진 만들기')").first();
