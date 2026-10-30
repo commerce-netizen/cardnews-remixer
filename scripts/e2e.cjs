@@ -46,7 +46,6 @@ const BASE = `http://127.0.0.1:${PORT}`;
     assert.ok(await page.isVisible("text=인스타그램 주소만"));
     console.log("✓ 추출 실패 시 수동 업로드 화면으로 이동");
 
-    assert.ok(await page.locator(".toggle input").first().isChecked(), "'사진도 AI로' 기본 켜짐");
     await page.setInputFiles("input[type=file]", files);
     await page.waitForSelector(".thumb >> nth=2");
     await page.click("button:has-text('카드뉴스 새로 만들기')");

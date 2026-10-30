@@ -1,11 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import Editor from "@/components/Editor";
 import { prepareImages, type PreparedImage } from "@/lib/client-images";
 import { SLIDE_H, SLIDE_W } from "@/components/SlideCard";
-import { IMAGE_GEN_ENABLED, loadAutoImages, makeAiPhoto, saveAutoImages } from "@/lib/slide-image";
+import { IMAGE_GEN_ENABLED, makeAiPhoto } from "@/lib/slide-image";
 import type { ExtractResult, RemixRequest, RemixResult, Slide } from "@/lib/types";
 
 type Step = "home" | "manual" | "loading" | "edit";
@@ -32,17 +32,6 @@ export default function Home() {
   const [loadingMsg, setLoadingMsg] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
-  // 사진까지 AI로 새로 만들지 (기본 켜짐, 이 브라우저에 기억)
-  const [autoImages, setAutoImages] = useState(true);
-
-  useEffect(() => {
-    setAutoImages(loadAutoImages());
-  }, []);
-
-  const changeAutoImages = (on: boolean) => {
-    setAutoImages(on);
-    saveAutoImages(on);
-  };
 
   // 수동 입력
   const [uploads, setUploads] = useState<PreparedImage[]>([]);
@@ -60,7 +49,7 @@ export default function Home() {
    * 사진 편집은 원본 사진만 있으면 되므로 각색 결과를 기다릴 필요가 없다 —
    * 그래서 전체 시간이 '둘 중 느린 쪽' 하나로 끝난다.
    */
-  const runRemix = async (src: Source, back: Step, withImages = autoImages) => {
+  const runRemix = async (src: Source, back: Step, withImages = true) => {
     setError(null);
     setStep("loading");
     const photos = withImages && IMAGE_GEN_ENABLED ? src.images.filter(Boolean).length : 0;
@@ -230,15 +219,6 @@ export default function Home() {
             <button className="btn btn-primary btn-huge" onClick={startFromUrl}>
               카드뉴스 새로 만들기 ▶
             </button>
-            {IMAGE_GEN_ENABLED && (
-              <label className="toggle">
-                <input type="checkbox" checked={autoImages} onChange={(e) => changeAutoImages(e.target.checked)} />
-                <span>
-                  <b>사진도 AI로 새로 만들기</b>
-                  <span className="muted small"> — 사진 수만큼 비용이 들어요</span>
-                </span>
-              </label>
-            )}
             <p className="muted small" style={{ margin: 0 }}>
               주소 얻는 법: 인스타그램 게시물 오른쪽 위 ⋯ (또는 종이비행기) → <b>링크 복사</b>
             </p>
@@ -298,18 +278,6 @@ export default function Home() {
               onChange={(e) => setManualCaption(e.target.value)}
             />
           </section>
-
-          {IMAGE_GEN_ENABLED && (
-            <section className="card">
-              <label className="toggle">
-                <input type="checkbox" checked={autoImages} onChange={(e) => changeAutoImages(e.target.checked)} />
-                <span>
-                  <b>사진도 AI로 새로 만들기</b>
-                  <span className="muted small"> — 사진 수만큼 비용이 들어요</span>
-                </span>
-              </label>
-            </section>
-          )}
 
           <button className="btn btn-primary btn-huge" onClick={startManual}>
             카드뉴스 새로 만들기 ▶
