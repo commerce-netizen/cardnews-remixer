@@ -1,0 +1,15 @@
+{
+  "_설명": "인기 레시피 탭에서 매일 모으는 인스타 계정. 아이디만 추가/삭제하면 다음 수집부터 반영돼요. 새로 넣은 계정은 첫 수집 때 최근 게시물 100개까지 한 번에 가져와요.",
+  "accounts": [
+    "hankki_ssok",
+    "gollabom",
+    "ddubimenu",
+    "today.menu.00",
+    "100recipe",
+    "kahyun_table",
+    "recipe_ing",
+    "jojubucook",
+    "quickrecipe.kr",
+    "recipe_1page"
+  ]
+}

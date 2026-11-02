@@ -8,6 +8,7 @@ export default function TemplatesPage() {
     <main className="page">
       <nav className="tabs">
         <Link className="tab" href="/">카드뉴스 만들기</Link>
+        <Link className="tab" href="/hot">🔥 인기 레시피</Link>
         <span className="tab on">디자인 템플릿</span>
       </nav>
       <TemplateManager />
