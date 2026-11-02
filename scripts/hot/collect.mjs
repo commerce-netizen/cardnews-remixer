@@ -21,7 +21,7 @@ const THUMBS = path.join(OUT, "thumbs");
 const TOKEN = process.env.BRIGHTDATA_API_TOKEN;
 const DATASET = process.env.BRIGHTDATA_DATASET_POSTS || "gd_lk5ns7kz21pck8jpis";
 const API = "https://api.brightdata.com";
-// 기간별 순위는 "그 기간에 늘어난 반응"이라 매일 모든 게시물 수치를 다시 받는다
+// 누적 수치를 매일 최신으로 유지하려고 모든 게시물을 다시 받는다
 const DAILY_POSTS = Number(process.env.HOT_DAILY_POSTS || 100);
 const BACKFILL_POSTS = Number(process.env.HOT_BACKFILL_POSTS || 100);
 
@@ -102,37 +102,21 @@ function toPost(r) {
 }
 
 /**
- * 기간 동안 늘어난 좋아요·댓글.
- * - 그 기간 이전의 수치 기록이 있으면: 지금 − 그때 (정확)
- * - 기록이 아직 짧으면: 기간 안에 올라온 게시물은 누적 전체, 더 오래된 게시물은
- *   '하루 평균 × 기간 일수'로 추정 (기록이 쌓이면 자동으로 정확한 값으로 바뀐다)
+ * 기간별 순위 — 기준은 항상 누적 좋아요·댓글(매일 갱신).
+ * 게시물을 빼지 않는다: 그 기간에 올라온 게시물을 누적순으로 먼저, 이어서 나머지 전부를 누적순으로.
  */
-export function gainOf(p, days, now) {
-  if (!Number.isFinite(days)) return { likes: p.likes, comments: p.comments };
-  const from = now - days * DAY;
-  const base = [...(p.hist || [])].reverse().find(([t]) => Date.parse(t) <= from + DAY / 4);
-  if (base) {
-    return { likes: Math.max(0, p.likes - base[1]), comments: Math.max(0, p.comments - base[2]) };
-  }
-  const ageDays = Math.max((now - Date.parse(p.date)) / DAY, 1 / 24);
-  const ratio = Math.min(1, days / ageDays);
-  return { likes: Math.round(p.likes * ratio), comments: Math.round(p.comments * ratio) };
-}
-
-/** 기간별 순위: 모든 게시물을 그 기간에 늘어난 반응으로 줄 세운다 (게시물을 빼지 않음) */
 export function rankLists(posts, now) {
   const lists = {};
-  const gains = {};
   for (const [period, days] of Object.entries(PERIODS)) {
     lists[period] = {};
-    for (const p of posts) (gains[p.code] ??= {})[period] = gainOf(p, days, now);
+    const recent = (p) => now - Date.parse(p.date) <= days * DAY;
     for (const key of ["likes", "comments"]) {
       lists[period][key] = [...posts]
-        .sort((a, b) => gains[b.code][period][key] - gains[a.code][period][key] || b[key] - a[key])
+        .sort((a, b) => Number(recent(b)) - Number(recent(a)) || b[key] - a[key])
         .map((p) => p.code);
     }
   }
-  return { lists, gains };
+  return { lists };
 }
 
 let sharpMod;
@@ -182,7 +166,7 @@ async function main() {
   const active = new Set(accounts);
   const posts = [...byCode.values()].filter((p) => active.has(p.account));
   const now = Date.now();
-  const { lists, gains } = rankLists(posts, now);
+  const { lists } = rankLists(posts, now);
 
   // 모든 게시물을 보여 주므로 썸네일도 전부 보관
   const need = new Set(posts.map((p) => p.code));
@@ -209,8 +193,6 @@ async function main() {
   const updatedAt = new Date(now).toISOString();
   const strip = ({ imageUrl, collectedAt, hist, ...rest }) => ({
     ...rest,
-    gain: gains[rest.code],
-    tracked: hist?.length ?? 0,
     thumb: fs.existsSync(path.join(THUMBS, `${rest.code}.webp`)),
   });
   fs.writeFileSync(

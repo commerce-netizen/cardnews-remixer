@@ -1,21 +1,21 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { HotData, HotPeriod, HotPost, HotSort } from "@/lib/hot";
 
 const PERIODS: { key: HotPeriod; label: string; hint: string }[] = [
-  { key: "day", label: "일일", hint: "모든 게시물을 최근 하루 동안 늘어난 반응 순으로" },
-  { key: "week", label: "주간", hint: "모든 게시물을 최근 7일 동안 늘어난 반응 순으로" },
-  { key: "month", label: "월간", hint: "모든 게시물을 최근 30일 동안 늘어난 반응 순으로" },
-  { key: "all", label: "역대", hint: "모든 게시물을 지금까지 쌓인 반응 순으로" },
+  { key: "day", label: "일일", hint: "최근 24시간에 올라온 게시물을 먼저, 이어서 나머지 전부를" },
+  { key: "week", label: "주간", hint: "최근 7일에 올라온 게시물을 먼저, 이어서 나머지 전부를" },
+  { key: "month", label: "월간", hint: "최근 30일에 올라온 게시물을 먼저, 이어서 나머지 전부를" },
+  { key: "all", label: "역대", hint: "모든 게시물을" },
 ];
 const SORTS: { key: HotSort; label: string }[] = [
   { key: "likes", label: "❤️ 좋아요 많은 순" },
   { key: "comments", label: "💬 댓글 많은 순" },
 ];
 const SHOW = 300;
-const PERIOD_WORD: Record<HotPeriod, string> = { day: "오늘", week: "이번 주", month: "이번 달", all: "누적" };
+const DAYS: Record<HotPeriod, number> = { day: 1, week: 7, month: 30, all: Infinity };
 
 const fmt = (n: number) =>
   n >= 10000 ? `${(n / 10000).toFixed(n >= 100000 ? 0 : 1)}만` : n.toLocaleString("ko-KR");
@@ -29,8 +29,6 @@ function ago(iso: string, now: number) {
   const dt = new Date(iso);
   return `${dt.getFullYear()}.${dt.getMonth() + 1}.${dt.getDate()}`;
 }
-
-const score = (p: HotPost, period: HotPeriod, key: HotSort) => p.gain?.[period]?.[key] ?? p[key];
 
 export default function HotBoard() {
   const router = useRouter();
@@ -50,16 +48,20 @@ export default function HotBoard() {
       .catch((e) => setError((e as Error).message || "인기 게시물을 불러오지 못했어요."));
   }, []);
 
+  const now = data ? Date.parse(data.updatedAt) : Date.now();
+  const isRecent = (p: HotPost) => now - Date.parse(p.date) <= DAYS[period] * 86_400_000;
+
+  // 기준은 항상 누적 좋아요·댓글. 그 기간에 올라온 게시물을 먼저, 나머지는 그 뒤에 전부
   const list: HotPost[] = useMemo(() => {
     if (!data) return [];
-    return (data.lists[period]?.[sort] ?? [])
-      .map((c) => data.posts[c])
-      .filter((p): p is HotPost => !!p && (account === "all" || p.account === account))
-      .sort((a, b) => score(b, period, sort) - score(a, period, sort) || b[sort] - a[sort])
+    return Object.values(data.posts)
+      .filter((p) => account === "all" || p.account === account)
+      .sort((a, b) => Number(isRecent(b)) - Number(isRecent(a)) || b[sort] - a[sort])
       .slice(0, SHOW);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [data, period, sort, account]);
+  const firstOld = period === "all" ? -1 : list.findIndex((p) => !isRecent(p));
 
-  const now = data ? Date.parse(data.updatedAt) : Date.now();
   const remix = (p: HotPost) => {
     router.push(`/?url=${encodeURIComponent(`https://www.instagram.com/p/${p.code}/`)}`);
   };
@@ -130,7 +132,13 @@ export default function HotBoard() {
 
       <div className="hot-grid">
         {list.map((p, i) => (
-          <article className="hot-card" key={p.code}>
+          <Fragment key={p.code}>
+          {i === firstOld && (
+            <div className="hot-divider">
+              ↓ {PERIODS.find((x) => x.key === period)?.label} 기간 전에 올라온 게시물 (누적 {sort === "likes" ? "좋아요" : "댓글"} 순)
+            </div>
+          )}
+          <article className="hot-card">
             <div className="hot-thumb">
               {p.thumb ? (
                 <img src={`/api/hot/thumb/${p.code}`} alt={p.caption.slice(0, 40)} loading="lazy" />
@@ -154,14 +162,9 @@ export default function HotBoard() {
               </div>
             </div>
             <div className="hot-meta">
-              {period !== "all" && (
-                <div className="hot-gain">
-                  {PERIOD_WORD[period]} {sort === "likes" ? "❤️" : "💬"} +{fmt(score(p, period, sort))}
-                </div>
-              )}
               <div className="hot-stats">
-                <b className={period === "all" && sort === "likes" ? "hl" : ""}>❤️ {fmt(p.likes)}</b>
-                <b className={period === "all" && sort === "comments" ? "hl" : ""}>💬 {fmt(p.comments)}</b>
+                <b className={sort === "likes" ? "hl" : ""}>❤️ {fmt(p.likes)}</b>
+                <b className={sort === "comments" ? "hl" : ""}>💬 {fmt(p.comments)}</b>
               </div>
               <div className="hot-who">
                 @{p.account} · {ago(p.date, now)}
@@ -169,6 +172,7 @@ export default function HotBoard() {
               <p className="hot-cap">{p.caption}</p>
             </div>
           </article>
+          </Fragment>
         ))}
       </div>
     </>
