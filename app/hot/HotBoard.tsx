@@ -68,7 +68,7 @@ export default function HotBoard() {
     <>
       <h1>🔥 인기 카드뉴스</h1>
       <p className="lead">
-        카드뉴스 계정 {data?.accounts.length ?? 3}곳의 게시물을 매일 아침 모아서, 반응 좋은 순서로 보여 드려요.
+        카드뉴스 상위 게시물을 매일 모아서, 반응 좋은 순서로 보여 드려요.
         {data && (
           <>
             <br />
