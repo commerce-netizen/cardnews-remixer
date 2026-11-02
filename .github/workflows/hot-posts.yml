@@ -6,6 +6,8 @@ on:
   schedule:
     - cron: "0 21 * * *" # UTC 21시 = 한국 06시
   workflow_dispatch: {}
+  push:
+    branches: [feat/hot-recipes] # TEMP: 머지 전 동작 확인용
 
 permissions:
   contents: write
