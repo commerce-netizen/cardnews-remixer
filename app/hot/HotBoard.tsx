@@ -66,9 +66,9 @@ export default function HotBoard() {
 
   return (
     <>
-      <h1>🔥 인기 레시피 카드뉴스</h1>
+      <h1>🔥 인기 카드뉴스</h1>
       <p className="lead">
-        요리 레시피 카드뉴스 계정 {data?.accounts.length ?? 3}곳의 게시물을 매일 아침 모아서, 반응 좋은 순서로 보여 드려요.
+        카드뉴스 계정 {data?.accounts.length ?? 3}곳의 게시물을 매일 아침 모아서, 반응 좋은 순서로 보여 드려요.
         {data && (
           <>
             <br />
