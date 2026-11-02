@@ -1,4 +1,4 @@
-/** 인기 레시피 탭 데이터 (매일 GitHub Actions 가 hot-data 브랜치에 저장) */
+/** 인기 카드뉴스 탭 데이터 (매일 GitHub Actions 가 hot-data 브랜치에 저장) */
 export type HotPost = {
   code: string;
   account: string;

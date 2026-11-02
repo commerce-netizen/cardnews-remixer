@@ -1,4 +1,4 @@
-// 인기 레시피 탭 데이터 수집기 (매일 GitHub Actions 에서 실행)
+// 인기 카드뉴스 탭 데이터 수집기 (매일 GitHub Actions 에서 실행)
 //
 // 1) scripts/hot/accounts.json 의 계정들의 최근 게시물을 브라이트데이터(Instagram Posts 데이터셋,
 //    '계정 주소로 찾기' 모드)로 받는다. 좋아요·댓글 수가 들어 있다.

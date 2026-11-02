@@ -145,7 +145,7 @@ export default function Home() {
     );
   };
 
-  // 인기 레시피 탭의 '각색하기' → /?url=게시물주소 로 들어오면 바로 시작
+  // 인기 카드뉴스 탭의 '각색하기' → /?url=게시물주소 로 들어오면 바로 시작
   const autoStarted = useRef(false);
   useEffect(() => {
     if (autoStarted.current) return;
@@ -214,7 +214,7 @@ export default function Home() {
         <>
           <nav className="tabs">
             <span className="tab on">카드뉴스 만들기</span>
-            <Link className="tab" href="/hot">🔥 인기 레시피</Link>
+            <Link className="tab" href="/hot">🔥 인기 카드뉴스</Link>
             <Link className="tab" href="/templates">디자인 템플릿</Link>
           </nav>
           <h1>카드뉴스 각색기</h1>
