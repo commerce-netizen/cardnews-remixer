@@ -21,13 +21,13 @@ const THUMBS = path.join(OUT, "thumbs");
 const TOKEN = process.env.BRIGHTDATA_API_TOKEN;
 const DATASET = process.env.BRIGHTDATA_DATASET_POSTS || "gd_lk5ns7kz21pck8jpis";
 const API = "https://api.brightdata.com";
-const DAILY_POSTS = Number(process.env.HOT_DAILY_POSTS || 15);
+// 기간별 순위는 "그 기간에 늘어난 반응"이라 매일 모든 게시물 수치를 다시 받는다
+const DAILY_POSTS = Number(process.env.HOT_DAILY_POSTS || 100);
 const BACKFILL_POSTS = Number(process.env.HOT_BACKFILL_POSTS || 100);
 
 const DAY = 86_400_000;
 export const PERIODS = { day: 1, week: 7, month: 30, all: Infinity };
-const TOP_GLOBAL = 60; // 기간·정렬마다 전체 상위
-const TOP_PER_ACCOUNT = 12; // 계정 필터용 계정별 상위
+const HIST_KEEP = 40; // 하루 1개씩 최근 40일치 수치 보관
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const readJson = (p, fallback) => {
@@ -101,24 +101,38 @@ function toPost(r) {
   };
 }
 
-/** 기간별 인기 목록 (게시물 코드 배열) */
+/**
+ * 기간 동안 늘어난 좋아요·댓글.
+ * - 그 기간 이전의 수치 기록이 있으면: 지금 − 그때 (정확)
+ * - 기록이 아직 짧으면: 기간 안에 올라온 게시물은 누적 전체, 더 오래된 게시물은
+ *   '하루 평균 × 기간 일수'로 추정 (기록이 쌓이면 자동으로 정확한 값으로 바뀐다)
+ */
+export function gainOf(p, days, now) {
+  if (!Number.isFinite(days)) return { likes: p.likes, comments: p.comments };
+  const from = now - days * DAY;
+  const base = [...(p.hist || [])].reverse().find(([t]) => Date.parse(t) <= from + DAY / 4);
+  if (base) {
+    return { likes: Math.max(0, p.likes - base[1]), comments: Math.max(0, p.comments - base[2]) };
+  }
+  const ageDays = Math.max((now - Date.parse(p.date)) / DAY, 1 / 24);
+  const ratio = Math.min(1, days / ageDays);
+  return { likes: Math.round(p.likes * ratio), comments: Math.round(p.comments * ratio) };
+}
+
+/** 기간별 순위: 모든 게시물을 그 기간에 늘어난 반응으로 줄 세운다 (게시물을 빼지 않음) */
 export function rankLists(posts, now) {
   const lists = {};
+  const gains = {};
   for (const [period, days] of Object.entries(PERIODS)) {
-    const inPeriod = posts.filter((p) => now - Date.parse(p.date) <= days * DAY);
     lists[period] = {};
+    for (const p of posts) (gains[p.code] ??= {})[period] = gainOf(p, days, now);
     for (const key of ["likes", "comments"]) {
-      const sorted = [...inPeriod].sort((a, b) => b[key] - a[key]);
-      const picked = new Set(sorted.slice(0, TOP_GLOBAL).map((p) => p.code));
-      const perAccount = {};
-      for (const p of sorted) {
-        perAccount[p.account] = (perAccount[p.account] || 0) + 1;
-        if (perAccount[p.account] <= TOP_PER_ACCOUNT) picked.add(p.code);
-      }
-      lists[period][key] = sorted.filter((p) => picked.has(p.code)).map((p) => p.code);
+      lists[period][key] = [...posts]
+        .sort((a, b) => gains[b.code][period][key] - gains[a.code][period][key] || b[key] - a[key])
+        .map((p) => p.code);
     }
   }
-  return lists;
+  return { lists, gains };
 }
 
 let sharpMod;
@@ -155,7 +169,11 @@ async function main() {
     const p = toPost(r);
     if (!p) continue;
     const prev = byCode.get(p.code);
-    byCode.set(p.code, { ...prev, ...p, collectedAt: new Date().toISOString() });
+    const stamp = new Date().toISOString();
+    // 하루에 한 번씩 수치 기록 (같은 날 여러 번 돌면 그날 기록을 덮어씀)
+    const hist = (prev?.hist || []).filter(([t]) => t.slice(0, 10) !== stamp.slice(0, 10));
+    hist.push([stamp, p.likes, p.comments]);
+    byCode.set(p.code, { ...prev, ...p, hist: hist.slice(-HIST_KEEP), collectedAt: stamp });
     fresh++;
   }
   console.log(`✔ 게시물 ${fresh}개 받음 → 누적 ${byCode.size}개`);
@@ -164,11 +182,11 @@ async function main() {
   const active = new Set(accounts);
   const posts = [...byCode.values()].filter((p) => active.has(p.account));
   const now = Date.now();
-  const lists = rankLists(posts, now);
+  const { lists, gains } = rankLists(posts, now);
 
-  // 목록에 든 게시물 썸네일만 보관
-  const need = new Set(Object.values(lists).flatMap((l) => [...l.likes, ...l.comments]));
-  const shown = posts.filter((p) => need.has(p.code));
+  // 모든 게시물을 보여 주므로 썸네일도 전부 보관
+  const need = new Set(posts.map((p) => p.code));
+  const shown = posts;
   let made = 0;
   let failed = 0;
   for (const p of shown) {
@@ -189,8 +207,10 @@ async function main() {
   console.log(`✔ 썸네일 새로 ${made}개 (실패 ${failed}개)`);
 
   const updatedAt = new Date(now).toISOString();
-  const strip = ({ imageUrl, collectedAt, ...rest }) => ({
+  const strip = ({ imageUrl, collectedAt, hist, ...rest }) => ({
     ...rest,
+    gain: gains[rest.code],
+    tracked: hist?.length ?? 0,
     thumb: fs.existsSync(path.join(THUMBS, `${rest.code}.webp`)),
   });
   fs.writeFileSync(

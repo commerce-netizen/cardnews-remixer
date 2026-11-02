@@ -5,16 +5,17 @@ import { useRouter } from "next/navigation";
 import type { HotData, HotPeriod, HotPost, HotSort } from "@/lib/hot";
 
 const PERIODS: { key: HotPeriod; label: string; hint: string }[] = [
-  { key: "day", label: "일일", hint: "최근 24시간에 올라온 게시물" },
-  { key: "week", label: "주간", hint: "최근 7일 동안 올라온 게시물" },
-  { key: "month", label: "월간", hint: "최근 30일 동안 올라온 게시물" },
-  { key: "all", label: "역대", hint: "지금까지 모은 모든 게시물" },
+  { key: "day", label: "일일", hint: "모든 게시물을 최근 하루 동안 늘어난 반응 순으로" },
+  { key: "week", label: "주간", hint: "모든 게시물을 최근 7일 동안 늘어난 반응 순으로" },
+  { key: "month", label: "월간", hint: "모든 게시물을 최근 30일 동안 늘어난 반응 순으로" },
+  { key: "all", label: "역대", hint: "모든 게시물을 지금까지 쌓인 반응 순으로" },
 ];
 const SORTS: { key: HotSort; label: string }[] = [
   { key: "likes", label: "❤️ 좋아요 많은 순" },
   { key: "comments", label: "💬 댓글 많은 순" },
 ];
-const SHOW = 60;
+const SHOW = 300;
+const PERIOD_WORD: Record<HotPeriod, string> = { day: "오늘", week: "이번 주", month: "이번 달", all: "누적" };
 
 const fmt = (n: number) =>
   n >= 10000 ? `${(n / 10000).toFixed(n >= 100000 ? 0 : 1)}만` : n.toLocaleString("ko-KR");
@@ -28,6 +29,8 @@ function ago(iso: string, now: number) {
   const dt = new Date(iso);
   return `${dt.getFullYear()}.${dt.getMonth() + 1}.${dt.getDate()}`;
 }
+
+const score = (p: HotPost, period: HotPeriod, key: HotSort) => p.gain?.[period]?.[key] ?? p[key];
 
 export default function HotBoard() {
   const router = useRouter();
@@ -52,7 +55,7 @@ export default function HotBoard() {
     return (data.lists[period]?.[sort] ?? [])
       .map((c) => data.posts[c])
       .filter((p): p is HotPost => !!p && (account === "all" || p.account === account))
-      .sort((a, b) => b[sort] - a[sort])
+      .sort((a, b) => score(b, period, sort) - score(a, period, sort) || b[sort] - a[sort])
       .slice(0, SHOW);
   }, [data, period, sort, account]);
 
@@ -108,7 +111,7 @@ export default function HotBoard() {
           </select>
         </div>
         <p className="muted small" style={{ margin: 0 }}>
-          {PERIODS.find((p) => p.key === period)?.hint} · 카드뉴스는 인스타가 조회수를 공개하지 않아서 좋아요·댓글로 순위를 매겨요.
+          {PERIODS.find((p) => p.key === period)?.hint} 보여 드려요. 카드뉴스는 인스타가 조회수를 공개하지 않아서 좋아요·댓글로 순위를 매겨요.
         </p>
       </div>
 
@@ -121,7 +124,7 @@ export default function HotBoard() {
       )}
       {data && list.length === 0 && (
         <div className="hot-empty">
-          <p>이 기간에 올라온 게시물이 아직 없어요. 다른 기간을 눌러 보세요.</p>
+          <p>아직 모은 게시물이 없어요. 내일 아침 6시 수집 후 다시 열어 주세요.</p>
         </div>
       )}
 
@@ -151,9 +154,14 @@ export default function HotBoard() {
               </div>
             </div>
             <div className="hot-meta">
+              {period !== "all" && (
+                <div className="hot-gain">
+                  {PERIOD_WORD[period]} {sort === "likes" ? "❤️" : "💬"} +{fmt(score(p, period, sort))}
+                </div>
+              )}
               <div className="hot-stats">
-                <b className={sort === "likes" ? "hl" : ""}>❤️ {fmt(p.likes)}</b>
-                <b className={sort === "comments" ? "hl" : ""}>💬 {fmt(p.comments)}</b>
+                <b className={period === "all" && sort === "likes" ? "hl" : ""}>❤️ {fmt(p.likes)}</b>
+                <b className={period === "all" && sort === "comments" ? "hl" : ""}>💬 {fmt(p.comments)}</b>
               </div>
               <div className="hot-who">
                 @{p.account} · {ago(p.date, now)}
