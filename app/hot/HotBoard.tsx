@@ -133,7 +133,7 @@ export default function HotBoard() {
           <article className="hot-card" key={p.code}>
             <div className="hot-thumb">
               {p.thumb ? (
-                <img src={`/api/hot/thumb/${p.code}`} alt={p.caption.slice(0, 40)} loading="lazy" />
+                <img src={`/api/hot/thumb/${p.code}`} alt={(p.caption || "").slice(0, 40)} loading="lazy" />
               ) : (
                 <div className="hot-noimg">사진 없음</div>
               )}
@@ -166,7 +166,7 @@ export default function HotBoard() {
               <div className="hot-who">
                 @{p.account} · {ago(p.date, now)}
               </div>
-              <p className="hot-cap">{p.caption}</p>
+              <p className="hot-cap">{p.caption || ""}</p>
             </div>
           </article>
         ))}

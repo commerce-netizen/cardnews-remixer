@@ -237,7 +237,7 @@ async function main() {
   const finalFresh = fresh.map((p) => {
     const d = details.get(p.code);
     const base = { ...p, date: known.get(p.code)?.date || dateFromCode(p.code) };
-    return d ? { ...base, kind: kindOf(d), slides: d.slides, caption: d.caption.replace(/\s+/g, " ").trim().slice(0, 220) } : base;
+    return d ? { ...base, kind: kindOf(d), slides: d.slides, caption: Array.from(d.caption.replace(/\s+/g, " ").trim()).slice(0, 220).join("") } : base;
   });
   const count = (k) => finalFresh.filter((p) => (p.kind || known.get(p.code)?.kind) === k).length;
   log(`  카드뉴스 ${count("carousel")}개 / 제외: 영상 섞인 카드뉴스 ${count("carousel-video")}, 릴스·영상 ${count("video")}, 사진 1장 ${count("image")}`);

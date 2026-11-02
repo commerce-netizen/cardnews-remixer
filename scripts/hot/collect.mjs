@@ -99,7 +99,7 @@ function toPost(r) {
     likes: Number(r.likes) || 0,
     comments: Number(r.num_comments) || 0,
     slides: Number(r.photos_number) || (Array.isArray(r.photos) ? r.photos.length : 1),
-    caption: String(r.description || "").replace(/\s+/g, " ").trim().slice(0, 220),
+    caption: Array.from(String(r.description || "").replace(/\s+/g, " ").trim()).slice(0, 220).join(""),
     imageUrl: r.thumbnail || r.photos?.[0] || null,
     kind,
   };
@@ -232,6 +232,7 @@ export async function saveHot({ out, accounts, db, fresh }) {
   const updatedAt = new Date(now).toISOString();
   const strip = ({ imageUrl, collectedAt, hist, ...rest }) => ({
     ...rest,
+    caption: typeof rest.caption === "string" ? rest.caption : "",
     gain: gains[rest.code],
     tracked: hist?.length ?? 0,
     thumb: fs.existsSync(path.join(THUMBS, `${rest.code}.webp`)),
