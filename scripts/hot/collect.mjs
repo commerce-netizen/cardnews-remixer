@@ -89,6 +89,9 @@ function toPost(r) {
   if (!code || !r.user_posted || !r.date_posted) return null;
   // 카드뉴스(캐러셀)·사진만. 릴스/영상은 뺀다
   if (r.content_type && !/carousel|image|photo/i.test(r.content_type)) return null;
+  const slidesInfo = Array.isArray(r.post_content) ? r.post_content : [];
+  const isCarousel = /carousel/i.test(r.content_type || "") || r.product_type === "carousel_container";
+  const kind = isCarousel ? (slidesInfo.some((c) => /video/i.test(c.type || "")) ? "carousel-video" : "carousel") : "image";
   return {
     code,
     account: r.user_posted,
@@ -98,6 +101,7 @@ function toPost(r) {
     slides: Number(r.photos_number) || (Array.isArray(r.photos) ? r.photos.length : 1),
     caption: String(r.description || "").replace(/\s+/g, " ").trim().slice(0, 220),
     imageUrl: r.thumbnail || r.photos?.[0] || null,
+    kind,
   };
 }
 
@@ -197,7 +201,9 @@ export async function saveHot({ out, accounts, db, fresh }) {
 
   // 목록에서 빠진 계정의 게시물은 지운다
   const active = new Set(accounts);
-  const posts = [...byCode.values()].filter((p) => active.has(p.account));
+  const allPosts = [...byCode.values()].filter((p) => active.has(p.account));
+  // 보여 주는 건 '영상 없는 카드뉴스(캐러셀)'만. 나머지는 종류만 기억해 두고(다시 확인 안 하게) 목록에서 뺀다
+  const posts = allPosts.filter((p) => p.kind === "carousel");
   const now = Date.now();
   const { lists, gains } = rankLists(posts, now);
 
@@ -232,7 +238,7 @@ export async function saveHot({ out, accounts, db, fresh }) {
   });
   fs.writeFileSync(
     path.join(OUT, "posts.json"),
-    JSON.stringify({ updatedAt, accounts: db.accounts, posts }, null, 0),
+    JSON.stringify({ updatedAt, accounts: db.accounts, posts: allPosts }, null, 0),
   );
   fs.writeFileSync(
     path.join(OUT, "hot.json"),
