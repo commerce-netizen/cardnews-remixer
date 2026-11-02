@@ -1,0 +1,56 @@
+# 인기 레시피 탭 데이터: 매일 아침 6시(한국시간) 레퍼런스 계정 게시물을 모아 hot-data 브랜치에 저장
+# 앱은 hot-data 브랜치의 hot.json·썸네일을 읽는다 (데이터만 바뀌니 Vercel 재배포 필요 없음)
+name: 인기 레시피 수집
+
+on:
+  schedule:
+    - cron: "0 21 * * *" # UTC 21시 = 한국 06시
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+concurrency:
+  group: hot-posts
+  cancel-in-progress: false
+
+jobs:
+  collect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 지난 데이터 가져오기
+        run: |
+          if git ls-remote --exit-code --heads origin hot-data >/dev/null; then
+            git clone --depth 1 --branch hot-data "https://github.com/${{ github.repository }}.git" hot-data
+            rm -rf hot-data/.git
+          else
+            mkdir hot-data
+          fi
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: 썸네일 도구 설치
+        run: npm i --prefix /tmp/sharp sharp@0.34.5 --no-save --silent
+
+      - name: 수집
+        env:
+          BRIGHTDATA_API_TOKEN: ${{ secrets.BRIGHTDATA_API_TOKEN }}
+          SHARP_PATH: /tmp/sharp/node_modules/sharp/lib/index.js
+          HOT_DIR: hot-data
+        run: node scripts/hot/collect.mjs
+
+      - name: hot-data 브랜치에 저장 (기록은 매번 1개만 남겨 저장소가 커지지 않게)
+        run: |
+          cd hot-data
+          echo '{"git":{"deploymentEnabled":false}}' > vercel.json
+          git init -q -b hot-data
+          git config user.name "hot-posts-bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add -A
+          git commit -qm "인기 레시피 데이터 $(date -u +%Y-%m-%dT%H:%MZ)"
+          git push -qf "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" hot-data

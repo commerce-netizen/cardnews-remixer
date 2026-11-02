@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Editor from "@/components/Editor";
 import { prepareImages, type PreparedImage } from "@/lib/client-images";
 import { SLIDE_H, SLIDE_W } from "@/components/SlideCard";
@@ -118,8 +118,8 @@ export default function Home() {
     }
   };
 
-  const startFromUrl = async () => {
-    if (!url.trim()) {
+  const startFromUrl = async (target = url) => {
+    if (!target.trim()) {
       setError("먼저 위 칸에 인스타그램 게시물 주소를 붙여 넣어 주세요.");
       return;
     }
@@ -129,7 +129,7 @@ export default function Home() {
     setLoadingMsg("인스타그램에서 게시물을 가져오는 중이에요…");
     let extracted: ExtractResult;
     try {
-      extracted = await postJson<ExtractResult>("/api/extract", { url });
+      extracted = await postJson<ExtractResult>("/api/extract", { url: target });
     } catch (e) {
       // 자동 추출 실패 → 수동 업로드 화면으로 안내
       setInfo(`${(e as Error).message}\n괜찮아요! 아래에서 사진을 직접 올리고 글을 붙여 넣으면 똑같이 만들 수 있어요.`);
@@ -144,6 +144,19 @@ export default function Home() {
       "home",
     );
   };
+
+  // 인기 레시피 탭의 '각색하기' → /?url=게시물주소 로 들어오면 바로 시작
+  const autoStarted = useRef(false);
+  useEffect(() => {
+    if (autoStarted.current) return;
+    const target = new URLSearchParams(window.location.search).get("url");
+    if (!target) return;
+    autoStarted.current = true;
+    window.history.replaceState(null, "", "/");
+    setUrl(target);
+    startFromUrl(target);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const addFiles = async (files: FileList | null) => {
     if (!files?.length) return;
@@ -201,6 +214,7 @@ export default function Home() {
         <>
           <nav className="tabs">
             <span className="tab on">카드뉴스 만들기</span>
+            <Link className="tab" href="/hot">🔥 인기 레시피</Link>
             <Link className="tab" href="/templates">디자인 템플릿</Link>
           </nav>
           <h1>카드뉴스 각색기</h1>
@@ -220,7 +234,7 @@ export default function Home() {
               onKeyDown={(e) => e.key === "Enter" && startFromUrl()}
               autoComplete="off"
             />
-            <button className="btn btn-primary btn-huge" onClick={startFromUrl}>
+            <button className="btn btn-primary btn-huge" onClick={() => startFromUrl()}>
               카드뉴스 새로 만들기 ▶
             </button>
             <p className="muted small" style={{ margin: 0 }}>
