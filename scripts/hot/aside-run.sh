@@ -6,7 +6,11 @@ mkdir -p "$BASE/logs"
 LOG="$BASE/logs/$(date +%Y-%m-%d).log"
 {
   echo "===== $(date '+%F %T') ====="
-  if [ -d "$BASE/repo/.git" ]; then git -C "$BASE/repo" pull -q --ff-only; else git clone -q https://github.com/commerce-netizen/cardnews-remixer.git "$BASE/repo"; fi
+  [ -d "$BASE/repo/.git" ] || git clone -q https://github.com/commerce-netizen/cardnews-remixer.git "$BASE/repo"
+  git -C "$BASE/repo" fetch -q origin
+  # main 에 Aside 수집기가 들어가 있으면 main, 아직 머지 전이면 작업 브랜치 코드 사용
+  if git -C "$BASE/repo" cat-file -e origin/main:scripts/hot/aside-collect.mjs 2>/dev/null; then REF=origin/main; else REF=origin/feat/aside-collector; fi
+  git -C "$BASE/repo" checkout -q --detach "$REF"
   [ -f "$BASE/sharp/node_modules/sharp/lib/index.js" ] || npm i --prefix "$BASE/sharp" sharp@0.34.5 --silent
   pgrep -xq Aside || { open -ga Aside; sleep 20; }
   for i in 1 2; do
