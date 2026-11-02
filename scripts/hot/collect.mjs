@@ -160,23 +160,40 @@ async function main() {
   const errors = records.filter((r) => r.error || r.error_code);
   if (errors.length) console.warn(`⚠ 오류 ${errors.length}건`, JSON.stringify(errors.slice(0, 3)).slice(0, 500));
 
-  const byCode = new Map(db.posts.map((p) => [p.code, p]));
-  let fresh = 0;
+  const posts = [];
   for (const r of records) {
     if (r.user_posted && r.followers) {
       db.accounts[r.user_posted] = { followers: r.followers, posts: r.posts_count ?? null };
     }
     const p = toPost(r);
-    if (!p) continue;
+    if (p) posts.push(p);
+  }
+  await saveHot({ out: OUT, accounts, db, fresh: posts });
+}
+
+/**
+ * 받은 게시물(fresh)을 누적 DB에 합치고 → 순위 계산 → 썸네일 → posts.json·hot.json 저장.
+ * 브라이트데이터 수집(collect.mjs)과 Aside 수집(aside-collect.mjs)이 함께 쓴다.
+ * fresh 항목: { code, account, date?, likes, comments, slides?, caption?, imageUrl? }
+ *  - date/caption/slides 가 없으면 예전에 받아 둔 값을 그대로 쓴다
+ */
+export async function saveHot({ out, accounts, db, fresh }) {
+  const OUT = out;
+  const THUMBS = path.join(OUT, "thumbs");
+  fs.mkdirSync(THUMBS, { recursive: true });
+  const byCode = new Map(db.posts.map((p) => [p.code, p]));
+  for (const p of fresh) {
     const prev = byCode.get(p.code);
+    const clean = Object.fromEntries(Object.entries(p).filter(([, v]) => v !== undefined && v !== null && v !== ""));
+    const merged = { ...prev, ...clean };
+    if (!merged.date) continue; // 올린 날짜를 모르면 순위를 못 매긴다
     const stamp = new Date().toISOString();
     // 하루에 한 번씩 수치 기록 (같은 날 여러 번 돌면 그날 기록을 덮어씀)
     const hist = (prev?.hist || []).filter(([t]) => t.slice(0, 10) !== stamp.slice(0, 10));
-    hist.push([stamp, p.likes, p.comments]);
-    byCode.set(p.code, { ...prev, ...p, hist: hist.slice(-HIST_KEEP), collectedAt: stamp });
-    fresh++;
+    hist.push([stamp, merged.likes, merged.comments]);
+    byCode.set(p.code, { ...merged, hist: hist.slice(-HIST_KEEP), collectedAt: stamp });
   }
-  console.log(`✔ 게시물 ${fresh}개 받음 → 누적 ${byCode.size}개`);
+  console.log(`✔ 게시물 ${fresh.length}개 받음 → 누적 ${byCode.size}개`);
 
   // 목록에서 빠진 계정의 게시물은 지운다
   const active = new Set(accounts);

@@ -1,10 +1,9 @@
-# 인기 카드뉴스 탭 데이터: 매일 아침 6시(한국시간) 레퍼런스 계정 게시물을 모아 hot-data 브랜치에 저장
-# 앱은 hot-data 브랜치의 hot.json·썸네일을 읽는다 (데이터만 바뀌니 Vercel 재배포 필요 없음)
+# 인기 카드뉴스 탭 데이터 — 브라이트데이터 예비 수집 (수동 실행 전용, 크레딧 듦)
+# 평소 매일 수집은 이 맥의 Aside 루틴(scripts/hot/aside-collect.mjs, 무료)이 한다.
+# Aside 쪽이 막혔을 때만 GitHub > Actions > 이 워크플로 > Run workflow 로 돌린다.
 name: 인기 카드뉴스 수집
 
 on:
-  schedule:
-    - cron: "0 21 * * *" # UTC 21시 = 한국 06시
   workflow_dispatch: {}
 
 permissions:
