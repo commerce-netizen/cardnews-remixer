@@ -8,6 +8,8 @@ export type HotPost = {
   slides: number;
   caption: string;
   thumb: boolean;
+  /** 기간별로 늘어난 좋아요·댓글 (역대 = 누적) */
+  gain?: Record<HotPeriod, { likes: number; comments: number }>;
 };
 export type HotPeriod = "day" | "week" | "month" | "all";
 export type HotSort = "likes" | "comments";

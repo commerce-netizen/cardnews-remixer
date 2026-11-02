@@ -478,6 +478,7 @@ input[type="range"] { width: 100%; height: 32px; accent-color: var(--primary); }
 .hot-card:focus-within .hot-actions { opacity: 1; }
 .hot-card:hover .hot-thumb img { transform: scale(1.03); }
 .hot-meta { padding: 12px 14px 14px; display: grid; gap: 4px; }
+.hot-gain { font-weight: 800; color: #ff4d2e; font-size: 1rem; }
 .hot-stats { display: flex; gap: 12px; font-size: 0.98rem; }
 .hot-stats b { font-weight: 700; color: var(--muted); }
 .hot-stats b.hl { color: var(--text); }
