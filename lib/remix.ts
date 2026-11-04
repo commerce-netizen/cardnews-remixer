@@ -122,7 +122,7 @@ function asMediaType(t: string): MediaType {
 }
 
 /** 슬라이드 이미지를 data URL 목록으로 (인스타 이미지는 서버가 내려받아 변환) */
-async function toDataUrls(req: RemixRequest): Promise<string[]> {
+export async function toDataUrls(req: RemixRequest): Promise<string[]> {
   if (req.imageDataUrls?.length) {
     return req.imageDataUrls.slice(0, MAX_IMAGES).map((d) => {
       if (!/^data:image\/[a-z+]+;base64,/.test(d)) throw new RemixError("이미지 형식이 올바르지 않아요.");

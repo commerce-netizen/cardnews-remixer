@@ -1,4 +1,5 @@
 import type { DmContent } from "./dm";
+import type { TextBlock } from "./layout";
 
 export type Slide = {
   /** 화면에 표시할 이미지 주소 (프록시 URL 또는 data URL). 없으면 글자만 있는 슬라이드 */
@@ -7,9 +8,22 @@ export type Slide = {
   sourceImage?: string | null;
   /** 원본 슬라이드에서 읽어낸 글 (참고용) */
   original: string;
-  title: string;
-  body: string;
+  /** 높이 ÷ 폭 (4:5 = 1.25) */
+  ratio: number;
+  /** 사진이 없을 때 바탕색 */
+  bg: string;
+  /** 사진 위에 얹는 글 상자들 */
+  blocks: TextBlock[];
+  /**
+   * 원본 디자인 모드에서 image가 아직 '글자가 박힌 원본'이면 true —
+   * 새 글 뒤에 원래 글씨를 가리는 바탕을 깐다. AI가 글자를 지운 사진이나 직접 올린 사진이면 false.
+   */
+  maskOriginal?: boolean;
+  /** 원본 디자인 모드: 사진이 차지하는 비율 (AI 새 사진 색감 맞추기용) */
+  photoShare?: number;
 };
+
+export type Mode = "design" | "recipe";
 
 export type ExtractResult = {
   imageUrls: string[];

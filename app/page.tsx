@@ -4,10 +4,31 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import Editor from "@/components/Editor";
 import { prepareImages, type PreparedImage } from "@/lib/client-images";
-import { SLIDE_H, SLIDE_W } from "@/components/SlideCard";
 import { IMAGE_GEN_ENABLED, makeAiPhoto } from "@/lib/slide-image";
 import type { DmContent } from "@/lib/dm";
-import type { ExtractResult, RemixRequest, RemixResult, Slide } from "@/lib/types";
+import { SLIDE_W, clampRatio, newBlock, slideHeight, styleOf, type LayoutResult } from "@/lib/layout";
+import { allTemplates, findTemplate, loadActiveId } from "@/lib/templates";
+import type { ExtractResult, Mode, RemixRequest, RemixResult, Slide } from "@/lib/types";
+
+
+/** 사진 비율(높이÷폭) */
+function imageRatio(src: string | null): Promise<number> {
+  if (!src) return Promise.resolve(1.25);
+  return new Promise((resolve) => {
+    const el = new Image();
+    el.onload = () => resolve(clampRatio(el.naturalHeight / el.naturalWidth));
+    el.onerror = () => resolve(1.25);
+    el.src = src;
+  });
+}
+
+/** 레시피 모드: 1번 장은 제목 상자, 2번 장부터 본문 상자 (지금 고른 템플릿 모양으로) */
+function recipeBlocks(i: number, title: string, body: string) {
+  const t = findTemplate(allTemplates(), loadActiveId());
+  return i === 0
+    ? [newBlock("title", title, styleOf(t.styles.title))]
+    : [newBlock("body", body, styleOf(t.styles.body))];
+}
 
 type Step = "home" | "manual" | "loading" | "edit";
 
@@ -45,6 +66,10 @@ export default function Home() {
   // AI가 각색한 캡션 본문 (CTA·고지 문구는 Editor가 템플릿대로 붙인다)
   const [caption, setCaption] = useState("");
   const [dmContent, setDmContent] = useState<DmContent | null>(null);
+  // 어떤 방식으로 만들었는지 (사용자가 고르지 않음: 사진이 있으면 원본 구성 분석, 글만 있으면 레시피 각색)
+  const [usedMode, setUsedMode] = useState<Mode>("design");
+  const [commerce, setCommerce] = useState(false);
+  const [recipe, setRecipe] = useState(false);
 
   /**
    * 글 각색과 AI 새 사진을 **동시에** 돌린다.
@@ -65,7 +90,7 @@ export default function Home() {
     let done = 0;
     const failed: number[] = [];
     const makePhoto = (img: string | null, i: number) =>
-      makeAiPhoto(img, "", "", SLIDE_W, SLIDE_H)
+      makeAiPhoto(img, "", "", SLIDE_W, 1350)
         .catch(() => {
           failed.push(i + 1);
           return null; // 실패한 장은 원본 사진을 그대로 쓴다
@@ -97,13 +122,15 @@ export default function Home() {
             image: aiImages[i] ?? origin,
             sourceImage: origin,
             original: r.slides[i]?.original ?? "",
-            title: i === 0 ? title || body : title,
-            body: i === 0 ? body : body || title,
+            ratio: 1.25,
+            bg: "",
+            blocks: recipeBlocks(i, i === 0 ? title || body : title, i === 0 ? body : body || title),
           };
         }),
       );
       setCaption(r.caption);
       setDmContent(r.dm ?? null);
+      setUsedMode("recipe");
       setSource(src);
       setInfo(
         failed.length
@@ -117,6 +144,97 @@ export default function Home() {
       setStep(back);
     }
   };
+
+  /**
+   * 원본 디자인 모드: 장마다 구성(글 위치·모양)을 읽고 새 글을 쓰는 것과,
+   * 원본 슬라이드에서 글자만 지우고 사진 구도를 바꾼 새 배경을 만드는 것을 **동시에** 돌린다.
+   * keep: 다시 각색할 때 지금 사진·글 모양을 그대로 두고 글만 바꾼다.
+   */
+  const runDesign = async (src: Source, back: Step, keep?: Slide[]) => {
+    if (!src.images.some(Boolean)) return runRemix(src, back);
+    setError(null);
+    setStep("loading");
+    const withImages = !keep && IMAGE_GEN_ENABLED;
+    setLoadingMsg(
+      withImages
+        ? "원본 구성을 읽고 카드뉴스를 새로 만들고 있어요…\n1~3분 정도 걸려요. 화면을 닫지 마세요."
+        : "글을 새로 쓰고 있어요…\n1분 정도 걸려요. 화면을 닫지 마세요.",
+    );
+    let done = 0;
+    const failed: number[] = [];
+    const total = src.images.filter(Boolean).length;
+    try {
+      const ratios = await Promise.all(src.images.map(imageRatio));
+      const [r, aiImages] = await Promise.all([
+        postJson<LayoutResult>("/api/layout", src.request),
+        withImages
+          ? Promise.all(
+              src.images.map((img, i) =>
+                img
+                  ? makeAiPhoto(img, "", "", SLIDE_W, slideHeight(ratios[i]), { mode: "design" })
+                      .catch(() => {
+                        failed.push(i + 1);
+                        return null; // 실패한 장은 원본 사진을 쓰지 않는다 (저작권) — 바탕색만 두고 다시 만들게 안내
+                      })
+                      .then((v) => {
+                        done += 1;
+                        if (done >= total) setLoadingMsg("마무리하고 있어요…\n거의 다 됐어요.");
+                        else if (done >= total / 2) setLoadingMsg("거의 다 만들었어요…\n조금만 기다려 주세요.");
+                        return v;
+                      })
+                  : Promise.resolve(null),
+              ),
+            )
+          : Promise.resolve([] as (string | null)[]),
+      ]);
+      setSlides(
+        r.slides.map((ls, i) => {
+          const prev = keep?.[i];
+          if (prev) {
+            // 다시 각색: 사진·모양은 그대로, 글 상자 수가 같으면 글만 바꾼다
+            const same = prev.blocks.length === ls.blocks.length;
+            return {
+              ...prev,
+              original: ls.original,
+              blocks: same ? prev.blocks.map((b, j) => ({ ...b, text: ls.blocks[j].text, accent: ls.blocks[j].accent })) : ls.blocks,
+            };
+          }
+          const origin = src.images[i] ?? null;
+          const ai = aiImages[i] ?? null;
+          return {
+            // 원본 이미지는 저작권 때문에 결과물에 쓰지 않는다. AI 새 이미지 생성용으로만 보관
+            image: ai,
+            sourceImage: origin,
+            original: ls.original,
+            ratio: ratios[i] ?? ls.ratio,
+            bg: ls.bg,
+            blocks: ls.blocks,
+            maskOriginal: false,
+            photoShare: ls.photoShare,
+          };
+        }),
+      );
+      setCaption(r.caption);
+      setDmContent(r.dm);
+      setCommerce(r.commerce || r.recipe);
+      setRecipe(r.recipe);
+      setUsedMode("design");
+      setSource(src);
+      setInfo(
+        failed.length
+          ? `${failed.join("·")}번 장은 AI 이미지를 못 만들어서 바탕색만 넣어 뒀어요. 그 장의 ✨ AI 새 이미지를 다시 눌러 주세요. (원본 이미지는 저작권 때문에 쓰지 않아요)`
+          : null,
+      );
+      setStep("edit");
+      window.scrollTo(0, 0);
+    } catch (e) {
+      setError((e as Error).message);
+      setStep(back);
+    }
+  };
+
+  // 종류는 사용자가 고르지 않는다 — 사진이 있으면 AI가 원본을 보고 판단(레시피면 DM까지), 글만 있으면 레시피 각색
+  const run = (src: Source, back: Step) => runDesign(src, back);
 
   const startFromUrl = async (target = url) => {
     if (!target.trim()) {
@@ -136,7 +254,7 @@ export default function Home() {
       setStep("manual");
       return;
     }
-    await runRemix(
+    await run(
       {
         request: { imageUrls: extracted.imageUrls, caption: extracted.caption },
         images: extracted.imageUrls.map(proxied),
@@ -175,7 +293,7 @@ export default function Home() {
       setError("사진을 올리거나, 카드뉴스 글을 붙여 넣어 주세요. (둘 중 하나는 꼭 필요해요)");
       return;
     }
-    runRemix(
+    run(
       {
         request: {
           imageDataUrls: uploads.map((u) => u.forAi),
@@ -218,7 +336,7 @@ export default function Home() {
             <Link className="tab" href="/templates">디자인 템플릿</Link>
           </nav>
           <h1>카드뉴스 각색기</h1>
-          <p className="lead">인스타그램 카드뉴스 주소만 넣으면, 글과 디자인을 새롭게 바꿔 드려요.</p>
+          <p className="lead">영상 없는 인스타그램 카드뉴스라면 무엇이든, 주소만 넣으면 새 사진·새 글로 다시 만들어 드려요.</p>
 
           {error && <div className="notice notice-error" role="alert">{error}</div>}
 
@@ -310,15 +428,23 @@ export default function Home() {
       {step === "edit" && info && <div className="notice notice-info">{info}</div>}
       {step === "edit" && source && (
         <Editor
+          mode={usedMode}
+          commerce={commerce}
+          recipe={recipe}
           slides={slides}
           captionBody={caption}
           dmContent={dmContent}
           onChangeSlides={setSlides}
           // 다시 각색해도 사용자가 바꾼 사진은 유지
-          onRemixAgain={() => runRemix({ ...source, images: slides.map((s) => s.image) }, "edit", false)}
+          onRemixAgain={() =>
+            usedMode === "design"
+              ? runDesign(source, "edit", slides)
+              : runRemix({ ...source, images: slides.map((s) => s.image) }, "edit", false)
+          }
           onRestart={restart}
         />
       )}
     </main>
   );
 }
+
