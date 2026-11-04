@@ -54,7 +54,7 @@ export default function HotBoard() {
     if (!data) return [];
     return (data.lists[period]?.[sort] ?? [])
       .map((c) => data.posts[c])
-      .filter((p): p is HotPost => !!p && (account === "all" || p.account === account))
+      .filter((p): p is HotPost => !!p && !!p.thumb && (account === "all" || p.account === account))
       .sort((a, b) => score(b, period, sort) - score(a, period, sort) || b[sort] - a[sort])
       .slice(0, SHOW);
   }, [data, period, sort, account]);
