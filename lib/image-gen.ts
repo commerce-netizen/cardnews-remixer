@@ -1,5 +1,6 @@
 import OpenAI, { toFile } from "openai";
 import { zodTextFormat } from "openai/helpers/zod";
+import sharp from "sharp";
 import { z } from "zod";
 import { UserFacingError } from "./errors";
 import { IMAGE_MODEL, isMockMode, openai, TEXT_MODEL } from "./openai";
@@ -8,18 +9,18 @@ import { IMAGE_MODEL, isMockMode, openai, TEXT_MODEL } from "./openai";
 export const isImageGenEnabled = () => process.env.NEXT_PUBLIC_ENABLE_IMAGE_GEN !== "0";
 
 /**
- * 만드는 방식 — 목표: '사실적이면서도 구도·배치가 한눈에 다른, 글자 없는 사진'
- *   describe (기본): 원본을 비전으로 분석(요리·재료·사진 느낌) → 같은 요리를 새로 생성.
- *                    원본 사진을 이미지 모델에 넣지 않으므로 구도·재료 배치가 실제로 달라진다.
- *                    사실감은 REALISM_RULE + 분석이 뽑아낸 photo_look_en 으로 유지한다.
- *   edit:            원본 사진을 편집 모델에 넣는다. 질감은 가장 비슷하지만 **입력 이미지 구조에 강하게
- *                    고정돼 구도·재료 배치가 거의 그대로 남는다**(실측 확인). 분석 실패 시 대체용으로도 쓴다.
+ * 만드는 방식 — 목표: '원본 색감·음식은 그대로, 구도만 다른, 글자 없는 사진'
+ *   edit (기본): 원본 사진을 편집 모델에 직접 넣는다. 음식 질감·색감이 원본 그대로 남는다.
+ *                편집 모델은 입력 구도에 끌려가는 성질이 있어서, 넣기 전에 사진을 뒤집고·확대해
+ *                구도를 미리 바꿔 두고(reframe), 결과 색감은 원본 색감에 다시 맞춘다(matchColors).
+ *   describe:    원본을 글로만 분석해서 같은 요리를 새로 그린다. 구도는 확 달라지지만
+ *                원본을 안 보고 그리므로 색감·음식이 달라져 덜 맛있어 보인다(사용자 피드백). 예비용.
  */
-const MODE: "describe" | "edit" = process.env.OPENAI_IMAGE_MODE === "edit" ? "edit" : "describe";
+const MODE: "describe" | "edit" = process.env.OPENAI_IMAGE_MODE === "describe" ? "describe" : "edit";
 
 type Quality = "low" | "medium" | "high";
-// 저비용 기본값 low
-const QUALITY: Quality = (["low", "medium", "high"] as const).find((q) => q === process.env.OPENAI_IMAGE_QUALITY) ?? "low";
+// low 는 음식 질감이 뭉개져 덜 맛있어 보여서 기본 medium
+const QUALITY: Quality = (["low", "medium", "high"] as const).find((q) => q === process.env.OPENAI_IMAGE_QUALITY) ?? "medium";
 
 /**
  * 출력 크기: 카드뉴스는 1080×1350(4:5).
@@ -133,28 +134,34 @@ function changeRules(v: Variation): string {
   ].join("\n");
 }
 
-/** 편집 방식 프롬프트: 같은 요리·재료·사진 느낌은 유지하되 구도·배치는 확실히 다르게 */
-function editPrompt(v: Variation) {
+/** 편집 방식에서 바꾸는 것: 구도만. 앵글은 살짝, 배치·가운데 오는 것만 */
+const EDIT_CHANGES = [
+  "slightly turn the camera — shoot from a little more to the side or a little higher than the input",
+  "rotate the dish a bit so a different side of the food faces the camera",
+  "move a few pieces of the food so they sit and overlap in a different arrangement",
+  "put a different part of the food in the middle of the frame",
+];
+
+/** 편집 방식 프롬프트: 음식·색감은 픽셀 수준으로 그대로, 구도·배치만 바꾼다 */
+function editPrompt() {
+  const changes = [...EDIT_CHANGES].sort(() => Math.random() - 0.5).slice(0, 2);
   return [
-    "Re-shoot this exact same food as a NEW photo taken at a different moment, from a different position.",
-    "The result must look CLEARLY DIFFERENT from the input at first glance — a genuinely different shot,",
-    "not the same shot with small edits. Do not reproduce the input's framing, angle or layout.",
+    "Edit this food photo. CHANGE ONLY THE COMPOSITION. Everything else must stay exactly as in the input.",
     "",
-    "KEEP: the same dish, the same ingredients and the same amounts, the same cookware/plate,",
-    "and the same real photographic look — lighting, color tone, sharpness, grain, mood (see PHOTOREALISM).",
+    "KEEP EXACTLY THE SAME (most important):",
+    "- the exact same food: same ingredients, same pieces, same sauce, same doneness, same surface texture and shine",
+    "- the exact same colors: same hue, saturation, brightness, contrast, white balance and color temperature as the input",
+    "- the same plate / pan / cookware and the same lighting",
+    "Do not re-cook, re-color, brighten, darken, desaturate, recolor or restyle the food. It must look just as appetizing as the input.",
     "",
-    "CHANGE ALL OF THESE:",
-    changeRules(v),
+    "CHANGE ONLY:",
+    ...changes.map((c) => `- ${c}`),
     "",
-    "같은 요리·같은 재료·같은 그릇·같은 사진 느낌은 그대로 두고,",
-    "앵글·거리·가운데 오는 것·재료들의 배치는 한눈에 다르게 바꿔라. 원본 구도를 따라 하지 마라.",
+    "원본 음식과 색감(채도·밝기·색온도)은 그대로 두고, 구도·배치만 바꿔라. 음식을 다시 그리거나 색을 바꾸지 마라.",
     "",
-    "If the input is a multi-panel collage (for example a 2x2 grid of cooking steps),",
-    "keep that same grid layout — change each panel's shot, not the layout.",
+    "If the input is a multi-panel collage (for example a 2x2 grid of cooking steps), keep that same grid layout.",
     "",
     FRAMING_RULE,
-    "",
-    REALISM_RULE,
     "",
     CLEAN_RULE,
   ].join("\n");
@@ -288,17 +295,99 @@ export async function remakeSlideImage({ image, title = "", body = "" }: ImageGe
         prompt: describedPrompt(analysis, pickVariation(analysis.original_angle)),
       });
     } else {
-      res = await client.images.edit({
-        ...common,
-        image: await toFile(source.data, `slide.${source.type.split("/")[1]}`, { type: source.type }),
-        prompt: editPrompt(pickVariation()),
+      const framed = await reframe(source.data);
+      const file = await toFile(framed, "slide.png", { type: "image/png" });
+      const edit = (fidelity: boolean) =>
+        client.images.edit({
+          ...common,
+          image: file,
+          prompt: editPrompt(),
+          ...(fidelity ? { input_fidelity: "high" as const } : {}),
+        });
+      // 원본 충실도 '높음'을 켠다. 모델이 이 옵션을 안 받으면 그때만 빼고 한 번 더
+      res = await edit(true).catch((e) => {
+        if (e instanceof OpenAI.APIError && e.status === 400 && /fidelity/i.test(e.message)) return edit(false);
+        throw e;
       });
     }
   }
 
   const b64 = res.data?.[0]?.b64_json;
   if (!b64) throw new UserFacingError("새 사진을 만들지 못했어요. 다시 한 번 눌러 주세요.");
-  return `data:image/jpeg;base64,${b64}`;
+  if (!source) return `data:image/jpeg;base64,${b64}`;
+  // 색감은 원본에 다시 맞춘다 (AI가 색을 바꿔 덜 맛있어 보이는 걸 막음)
+  const matched = await matchColors(Buffer.from(b64, "base64"), source.data).catch((e) => {
+    console.error("[image-gen] 색감 맞추기 실패", e);
+    return null;
+  });
+  return `data:image/jpeg;base64,${(matched ?? Buffer.from(b64, "base64")).toString("base64")}`;
+}
+
+/**
+ * 편집 모델에 넣기 전에 구도를 미리 바꿔 둔다 — 좌우 뒤집기 + 다른 곳을 중심으로 살짝 확대.
+ * 픽셀을 옮기기만 하므로 색감·음식은 그대로다.
+ */
+export async function reframe(input: Buffer): Promise<Buffer> {
+  const img = sharp(input).rotate();
+  const { width = 1080, height = 1350 } = await img.metadata();
+  const zoom = 0.82 + Math.random() * 0.1; // 82~92% 영역만 남김
+  const w = Math.round(width * zoom);
+  const h = Math.round(height * zoom);
+  const left = Math.round((width - w) * Math.random());
+  const top = Math.round((height - h) * (0.2 + Math.random() * 0.4)); // 위아래 끝(글자 띠)은 덜 고름
+  let out = img.extract({ left, top, width: w, height: h });
+  if (Math.random() < 0.7) out = out.flop(); // 좌우 뒤집기
+  return out.resize(width, height, { fit: "fill" }).png().toBuffer();
+}
+
+/**
+ * 결과 사진의 색감(채널별 평균·대비)을 원본 사진에 맞춘다.
+ * 원본 통계는 가운데 영역에서만 잰다 — 카드뉴스 위아래 글자 띠·그라데이션이 섞이지 않게.
+ */
+export async function matchColors(out: Buffer, ref: Buffer): Promise<Buffer> {
+  // 가운데 영역의 채널별 평균·표준편차 + 평균 채도
+  const stats = async (buf: Buffer) => {
+    const small = await sharp(buf).rotate().resize(256, 320, { fit: "fill" }).toBuffer();
+    const { data } = await sharp(small)
+      .extract({ left: 38, top: 64, width: 180, height: 192 })
+      .removeAlpha()
+      .raw()
+      .toBuffer({ resolveWithObject: true });
+    const n = data.length / 3;
+    const sum = [0, 0, 0];
+    const sq = [0, 0, 0];
+    let sat = 0;
+    for (let i = 0; i < data.length; i += 3) {
+      const px = [data[i], data[i + 1], data[i + 2]];
+      for (let c = 0; c < 3; c++) { sum[c] += px[c]; sq[c] += px[c] ** 2; }
+      const mx = Math.max(...px);
+      sat += mx ? (mx - Math.min(...px)) / mx : 0;
+    }
+    const ch = sum.map((m, c) => ({ mu: m / n, sd: Math.sqrt(Math.max(1, sq[c] / n - (m / n) ** 2)) }));
+    return { ch, sat: sat / n };
+  };
+  const STRENGTH = 0.8; // 100%로 맞추면 부자연스러울 때가 있어 80%만
+  const ref0 = await stats(ref);
+  const out0 = await stats(out);
+
+  // 1) 채널별 밝기·색온도 맞추기
+  const r = ref0.ch, o = out0.ch;
+  const gain = o.map((s, c) => Math.min(1.35, Math.max(0.75, r[c].sd / s.sd)));
+  const lut = [0, 1, 2].map((c) =>
+    Uint8ClampedArray.from({ length: 256 }, (_, v) => {
+      const t = (v - o[c].mu) * gain[c] + r[c].mu;
+      return Math.round(v + (t - v) * STRENGTH);
+    }),
+  );
+  const { data, info } = await sharp(out).removeAlpha().raw().toBuffer({ resolveWithObject: true });
+  for (let i = 0; i < data.length; i += 3) for (let c = 0; c < 3; c++) data[i + c] = lut[c][data[i + c]];
+  const toned = await sharp(data, { raw: { width: info.width, height: info.height, channels: 3 } }).png().toBuffer();
+
+  // 2) 채도 맞추기 (음식이 칙칙해지는 게 '덜 맛있어 보이는' 가장 큰 원인)
+  const sat1 = (await stats(toned)).sat;
+  const ratio = sat1 > 0.01 ? ref0.sat / sat1 : 1;
+  const satGain = Math.min(1.5, Math.max(0.8, 1 + (ratio - 1) * STRENGTH));
+  return sharp(toned).modulate({ saturation: satGain }).jpeg({ quality: 92 }).toBuffer();
 }
 
 /** 데모 모드: 실제 호출 대신 글자 없는 그러데이션 자리표시 사진 */
