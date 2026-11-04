@@ -1,3 +1,4 @@
+import { hotRawUrl } from "./hot";
 import https from "node:https";
 import zlib from "node:zlib";
 import { UserFacingError } from "./errors";
@@ -276,8 +277,24 @@ function decodeHtml(s: string): string {
     .replace(/&#(\d+);/g, (_, d) => String.fromCodePoint(Number(d)));
 }
 
+/**
+ * 방법 0: 퍼가기를 막아 둔 게시물은 서버에서 표지 1장밖에 못 가져온다.
+ * 매일 수집(로그인된 브라우저)이 그런 게시물의 슬라이드 전체 주소를 hot-data/slides.json 에 받아 두므로 그걸 쓴다.
+ */
+async function viaCollected(code: string): Promise<ExtractResult | null> {
+  const bucket = Math.floor(Date.now() / 600_000);
+  const res = await fetch(`${hotRawUrl("slides.json")}?v=${bucket}`, { cache: "no-store", signal: AbortSignal.timeout(8_000) });
+  if (!res.ok) return null;
+  const all = (await res.json()) as Record<string, { urls: string[]; exp: number; caption: string }>;
+  const s = all[code];
+  if (!s?.urls?.length || s.exp < Date.now() + 3_600_000) return null; // 만료됐거나 곧 만료되면 안 씀
+  return { imageUrls: s.urls, caption: s.caption };
+}
+
 export async function extractInstagram(input: string): Promise<ExtractResult> {
   const code = parseShortcode(input);
+  const collected = await viaCollected(code).catch(() => null);
+  if (collected) return collected;
   let partial = null as ExtractResult | null;
 
   // 임베드가 가장 잘 된다(캐러셀 전체+캡션 전문). 그다음 GraphQL, 막히면 렌더링 프록시, 마지막이 og(1장뿐)

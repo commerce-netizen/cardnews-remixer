@@ -104,7 +104,7 @@ for (const c of ${JSON.stringify(codes)}) {
       const m = JSON.parse(JSON.parse(html.slice(s, k + 1)))?.gql_data?.shortcode_media;
       if (m) {
         const kids = (m.edge_sidecar_to_children?.edges || []).map(e => e.node);
-        info = { type: m.__typename, video: !!m.is_video, videoSlides: kids.filter(n => n.is_video).length, slides: kids.length || 1, caption: m.edge_media_to_caption?.edges?.[0]?.node?.text || "" };
+        info = { embed: true, type: m.__typename, video: !!m.is_video, videoSlides: kids.filter(n => n.is_video).length, slides: kids.length || 1, caption: m.edge_media_to_caption?.edges?.[0]?.node?.text || "" };
       }
     } catch (e) { info = null; } // 퍼가기 막힌 게시물은 여기서 깨진다 → 아래 일반 페이지로
     if (!info) {
@@ -125,6 +125,7 @@ for (const c of ${JSON.stringify(codes)}) {
           if (!m) continue;
           const kids = m.carousel_media || [];
           return {
+            embed: false,
             type: m.media_type === 8 ? "GraphSidecar" : m.media_type === 2 ? "GraphVideo" : "GraphImage",
             video: m.media_type === 2,
             videoSlides: kids.filter(k => k.media_type === 2).length,
@@ -141,6 +142,50 @@ for (const c of ${JSON.stringify(codes)}) {
 }
 __out = res;
 `);
+}
+
+/**
+ * 퍼가기를 막아 둔 게시물(예: my_zipcode)은 사이트 서버가 표지 1장밖에 못 가져온다.
+ * 그래서 로그인된 Aside 브라우저로 게시물 페이지를 열어 슬라이드 전체 사진 주소 + 캡션 전문을 미리 받아 둔다.
+ * 사진 주소는 4일쯤 뒤 만료되므로(oe=), 만료가 가까워지면 다시 받는다.
+ */
+function scrapeSlides(codes) {
+  return repl(`
+const res = [];
+for (const c of ${JSON.stringify(codes)}) {
+  try {
+    await openTab("https://www.instagram.com/p/" + c + "/");
+    await sleep(1200);
+    res.push([c, await page.evaluate((code) => {
+      const find = (o, d = 0) => {
+        if (!o || typeof o !== "object" || d > 300) return null;
+        if (o.code === code && ("media_type" in o)) return o;
+        for (const v of Array.isArray(o) ? o : Object.values(o)) { const r = find(v, d + 1); if (r) return r; }
+        return null;
+      };
+      for (const sc of document.querySelectorAll('script[type="application/json"]')) {
+        if (!sc.textContent.includes(code)) continue;
+        let m; try { m = find(JSON.parse(sc.textContent)); } catch (e) { continue; }
+        if (!m) continue;
+        const urls = (m.carousel_media || [m]).map((k) => {
+          const cs = [...(k.image_versions2?.candidates || [])].sort((a, b) => a.width - b.width);
+          return (cs.find((x) => x.width >= 1080) || cs[cs.length - 1])?.url;
+        }).filter(Boolean);
+        return { urls, caption: m.caption?.text || "" };
+      }
+      return null;
+    }, c)]);
+  } catch (e) { res.push([c, null]); }
+  for (const t of [...tabs]) { try { await closeTab(t); } catch (e) {} }
+}
+__out = res;
+`);
+}
+
+/** 사진 주소들 중 가장 이른 만료 시각 (주소의 oe= 값, 16진수 초) */
+function urlsExpire(urls) {
+  const t = urls.map((u) => parseInt(u.match(/[?&]oe=([0-9A-Fa-f]+)/)?.[1] || "0", 16) * 1000).filter(Boolean);
+  return t.length ? Math.min(...t) : 0;
 }
 
 /** 게시물 코드에 올린 시각이 들어 있다 (인스타 ID 규칙) */
@@ -237,10 +282,35 @@ async function main() {
   const finalFresh = fresh.map((p) => {
     const d = details.get(p.code);
     const base = { ...p, date: known.get(p.code)?.date || dateFromCode(p.code) };
-    return d ? { ...base, kind: kindOf(d), slides: d.slides, caption: Array.from(d.caption.replace(/\s+/g, " ").trim()).slice(0, 220).join("") } : base;
+    return d ? { ...base, kind: kindOf(d), embed: d.embed, slides: d.slides, caption: Array.from(d.caption.replace(/\s+/g, " ").trim()).slice(0, 220).join("") } : base;
   });
   const count = (k) => finalFresh.filter((p) => (p.kind || known.get(p.code)?.kind) === k).length;
   log(`  카드뉴스 ${count("carousel")}개 / 제외: 영상 섞인 카드뉴스 ${count("carousel-video")}, 릴스·영상 ${count("video")}, 사진 1장 ${count("image")}`);
+
+  // 퍼가기 막힌 카드뉴스: 슬라이드 전체 주소가 없거나 2일 안에 만료되면 다시 받는다
+  const freshBy = new Map(finalFresh.map((p) => [p.code, p]));
+  const all = new Map([...db.posts.map((p) => [p.code, p]), ...finalFresh.map((p) => [p.code, { ...known.get(p.code), ...p }])]);
+  const soon = Date.now() + 2 * 86400_000;
+  const blocked = [...all.values()].filter(
+    (p) => accounts.includes(p.account) && p.kind === "carousel" && p.embed === false && !(p.slidesExp > soon),
+  );
+  log(`  퍼가기 막힌 카드뉴스 슬라이드 받기 ${blocked.length}개`);
+  let gotSlides = 0;
+  for (let i = 0; i < blocked.length; i += DETAIL_BATCH) {
+    try {
+      for (const [c, d] of scrapeSlides(blocked.slice(i, i + DETAIL_BATCH).map((p) => p.code))) {
+        if (!d?.urls?.length) continue;
+        const add = { slideUrls: d.urls, slidesExp: urlsExpire(d.urls), fullCaption: d.caption };
+        const prev = db.posts.find((p) => p.code === c);
+        if (prev) Object.assign(prev, add);
+        if (freshBy.has(c)) Object.assign(freshBy.get(c), add);
+        gotSlides++;
+      }
+    } catch (e) {
+      log(`⚠ 슬라이드 받기 일부 실패: ${e.message.slice(0, 200)}`);
+    }
+  }
+  if (blocked.length) log(`  슬라이드 받음 ${gotSlides}/${blocked.length}개`);
 
   process.env.SHARP_PATH ||= path.join(BASE, "sharp/node_modules/sharp/lib/index.js");
   await saveHot({ out: OUT, accounts, db, fresh: finalFresh });

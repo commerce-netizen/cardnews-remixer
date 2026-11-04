@@ -240,7 +240,7 @@ export async function saveHot({ out, accounts, db, fresh }) {
   }
 
   const updatedAt = new Date(now).toISOString();
-  const strip = ({ imageUrl, collectedAt, hist, ...rest }) => ({
+  const strip = ({ imageUrl, collectedAt, hist, slideUrls, slidesExp, fullCaption, embed, ...rest }) => ({
     ...rest,
     caption: typeof rest.caption === "string" ? rest.caption : "",
     gain: gains[rest.code],
@@ -260,7 +260,12 @@ export async function saveHot({ out, accounts, db, fresh }) {
       posts: Object.fromEntries(shown.map((p) => [p.code, strip(p)])),
     }),
   );
-  console.log(`✅ 완료 → ${OUT}/hot.json`);
+  // 퍼가기 막힌 게시물의 슬라이드 전체 주소 — 사이트 서버가 '각색하기' 때 이걸로 전 장을 가져온다
+  const slides = Object.fromEntries(
+    shown.filter((p) => p.slideUrls?.length).map((p) => [p.code, { urls: p.slideUrls, exp: p.slidesExp, caption: p.fullCaption || "" }]),
+  );
+  fs.writeFileSync(path.join(OUT, "slides.json"), JSON.stringify(slides));
+  console.log(`✅ 완료 → ${OUT}/hot.json (슬라이드 미리 받아 둔 게시물 ${Object.keys(slides).length}개)`);
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {
