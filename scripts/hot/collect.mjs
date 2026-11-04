@@ -203,31 +203,41 @@ export async function saveHot({ out, accounts, db, fresh }) {
   const active = new Set(accounts);
   const allPosts = [...byCode.values()].filter((p) => active.has(p.account));
   // 보여 주는 건 '영상 없는 카드뉴스(캐러셀)'만. 나머지는 종류만 기억해 두고(다시 확인 안 하게) 목록에서 뺀다
-  const posts = allPosts.filter((p) => p.kind === "carousel");
+  const carousels = allPosts.filter((p) => p.kind === "carousel");
   const now = Date.now();
-  const { lists, gains } = rankLists(posts, now);
 
-  // 모든 게시물을 보여 주므로 썸네일도 전부 보관
-  const need = new Set(posts.map((p) => p.code));
-  const shown = posts;
+  // 썸네일 만들기 (실패하면 한 번 더)
   let made = 0;
   let failed = 0;
-  for (const p of shown) {
+  for (const p of carousels) {
     const file = path.join(THUMBS, `${p.code}.webp`);
-    if (fs.existsSync(file)) continue;
-    if (!p.imageUrl) continue;
-    try {
-      await makeThumb(p.imageUrl, file);
-      made++;
-    } catch (e) {
-      failed++;
-      console.warn(`  썸네일 실패 ${p.code}: ${e.message}`);
+    if (fs.existsSync(file) || !p.imageUrl) continue;
+    for (let i = 0; i < 2; i++) {
+      try {
+        await makeThumb(p.imageUrl, file);
+        made++;
+        break;
+      } catch (e) {
+        if (i === 1) {
+          failed++;
+          console.warn(`  썸네일 실패 ${p.code}: ${e.message}`);
+        }
+      }
     }
   }
+  // 사진(썸네일)이 없는 게시물은 화면에 절대 안 내보낸다 — 다음 수집 때 사진이 생기면 그때 나온다
+  const posts = carousels.filter((p) => fs.existsSync(path.join(THUMBS, `${p.code}.webp`)));
+  const { lists, gains } = rankLists(posts, now);
+  const need = new Set(posts.map((p) => p.code));
+  const shown = posts;
   for (const f of fs.readdirSync(THUMBS)) {
     if (!need.has(f.replace(/\.webp$/, ""))) fs.unlinkSync(path.join(THUMBS, f));
   }
-  console.log(`✔ 썸네일 새로 ${made}개 (실패 ${failed}개)`);
+  console.log(`✔ 썸네일 새로 ${made}개 (실패 ${failed}개) · 사진 없어 숨긴 게시물 ${carousels.length - posts.length}개`);
+  // 썸네일이 대부분 실패하면(이미지 도구 고장 등) 올리지 않고 멈춘다 — 사이트의 멀쩡한 데이터를 지키기 위해
+  if (made + failed >= 5 && failed / (made + failed) > 0.5) {
+    throw new Error(`썸네일이 ${failed}개나 실패해서 올리지 않았어요. 이미지 도구(sharp)를 확인해 주세요.`);
+  }
 
   const updatedAt = new Date(now).toISOString();
   const strip = ({ imageUrl, collectedAt, hist, ...rest }) => ({
