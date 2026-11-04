@@ -1,119 +1,147 @@
 "use client";
 
-import { forwardRef, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
-import { pretendard } from "@/lib/fonts";
-import { fontStack } from "@/lib/webfonts";
 import {
-  DEFAULT_TEMPLATE,
-  SIZE_SCALE,
-  isLight,
-  rgba,
-  type Template,
-  type TextStyle,
-} from "@/lib/templates";
+  forwardRef,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type CSSProperties,
+  type PointerEvent as RPointerEvent,
+  type ReactNode,
+} from "react";
+import { pretendard } from "@/lib/fonts";
+import { fontStack, snapWeight } from "@/lib/webfonts";
+import { SLIDE_W, rgba, slideHeight, type BlockStyle, type TextBlock } from "@/lib/layout";
+import type { WatermarkStyle } from "@/lib/templates";
 import type { Slide } from "@/lib/types";
 
-/** 인스타그램 세로 피드 비율 4:5 */
-export const SLIDE_W = 1080;
+export { SLIDE_W };
+/** 레시피 모드 기본: 인스타그램 세로 피드 4:5 */
 export const SLIDE_H = 1350;
 
-/*
- * 기본 디자인 수치는 저장소 루트의 레퍼런스(ref-slide*.jpg, 800×1000)를 픽셀 측정해 1080×1350(×1.35)로 옮긴 값.
- *   표지 제목: 84px, 줄 간격 103px, 왼쪽 77px, 마지막 줄 바닥 ≈1185px, 검은 외곽선
- *   본문 박스: x 169~911(폭 742, 가운데), y 953~1211(높이 258), 흰색 48% 반투명 + 1.5px 검은 테두리
- *   본문 글자: 52px, 줄 간격 57px, 가운데 정렬, 검은 외곽선
- *   [광고]: 오른쪽 76px·위 58px, 30px, 흰색 반투명 / 워터마크: 가운데, 위 1264px, 31px, 흰색 반투명
- * 템플릿은 이 틀 위에서 글꼴·색·글상자·위치만 바꾼다.
- */
-// CSS 변수(var(--font-…))가 아닌 실제 글꼴 이름을 써야 PNG 저장(html-to-image) 때 글꼴이 함께 들어간다
 const SMALL_FONT = `${pretendard.style.fontFamily}, sans-serif`;
-const COVER_INSET = { x: 77, y: 150 };
-const BODY_INSET = { x: 169, y: 139 };
 
 /** 글자 둘레를 테두리로 감싸는 text-shadow (PNG 저장에서도 그대로 보이도록 stroke 대신 사용) */
-function outline(px: number, color: string, extra = ""): string {
-  const shadows: string[] = [];
+function outlineShadow(px: number, color: string): string[] {
+  const out: string[] = [];
   for (let i = 0; i < 16; i++) {
     const a = (i / 16) * Math.PI * 2;
-    shadows.push(`${(Math.cos(a) * px).toFixed(2)}px ${(Math.sin(a) * px).toFixed(2)}px 0 ${color}`);
+    out.push(`${(Math.cos(a) * px).toFixed(2)}px ${(Math.sin(a) * px).toFixed(2)}px 0 ${color}`);
   }
-  if (extra) shadows.push(extra);
-  return shadows.join(", ");
+  return out;
 }
 
-const lineCount = (t: string, perLine: number) =>
-  t.split("\n").reduce((n, l) => n + Math.max(1, Math.ceil(l.length / perLine)), 0);
-
-/** 줄이 많아지면 글자를 줄여 사진 밖으로 넘치지 않게 */
-// 한 줄에 들어가는 대략의 글자 수(공백 포함): 표지 84px·폭 926px ≈ 15자, 본문 52px·폭 680px ≈ 20자
-function titleSize(t: string) {
-  const n = lineCount(t, 15);
-  return n <= 3 ? 84 : n === 4 ? 74 : 64;
-}
-function bodySize(t: string) {
-  const n = lineCount(t, 20);
-  return n <= 3 ? 52 : n === 4 ? 46 : 40;
+export function textShadow(b: BlockStyle): string {
+  const s: string[] = [];
+  if (b.outline && b.outlineWidth > 0) s.push(...outlineShadow(b.outlineWidth, b.outlineColor));
+  if (b.shadow) s.push(`0 ${Math.max(2, Math.round(b.size * 0.05))}px ${Math.max(4, Math.round(b.size * 0.14))}px ${rgba(b.shadowColor, 55)}`);
+  return s.length ? s.join(", ") : "none";
 }
 
-const JUSTIFY: Record<TextStyle["pos"], CSSProperties["justifyContent"]> = {
-  top: "flex-start",
-  middle: "center",
-  bottom: "flex-end",
-};
+/** 글꼴이 늦게 내려오면 글 크기 맞춤을 다시 하도록 */
+function useFontsTick(): number {
+  const [tick, setTick] = useState(0);
+  useEffect(() => {
+    if (typeof document === "undefined" || !document.fonts) return;
+    const on = () => setTick((t) => t + 1);
+    document.fonts.addEventListener("loadingdone", on);
+    return () => document.fonts.removeEventListener("loadingdone", on);
+  }, []);
+  return tick;
+}
 
-type Props = { slide: Slide; index: number; watermark: string; template?: Template };
+const JUSTIFY = { top: "flex-start", middle: "center", bottom: "flex-end" } as const;
 
-/** 실제 크기(1080×1350)로 그리는 슬라이드. PNG 저장 시 이 요소를 그대로 캡처한다. */
-export const SlideCanvas = forwardRef<HTMLDivElement, Props>(function SlideCanvas(
-  { slide, index, watermark, template = DEFAULT_TEMPLATE },
-  ref,
-) {
-  const cover = index === 0;
-  const text = (cover ? slide.title : slide.body).trim();
-  const style = cover ? template.cover : template.body;
-  const inset = cover ? COVER_INSET : BODY_INSET;
+function withAccent(text: string, accent: string, color: string): ReactNode {
+  if (!accent || !text.includes(accent)) return text;
+  const parts = text.split(accent);
+  return parts.flatMap((p, i) => (i === 0 ? [p] : [<span key={i} style={{ color }}>{accent}</span>, p]));
+}
 
-  const base = cover ? titleSize(text) : bodySize(text);
-  const size = Math.round(base * SIZE_SCALE[style.size]);
-  const outlineColor = isLight(style.color) ? "#000" : "#fff";
-  const shadow = style.outline
-    ? outline(cover ? 4 : 3, outlineColor, cover ? "0 4px 10px rgba(0,0,0,0.45)" : "")
-    : "none";
+/** 글 상자 하나. 글이 상자를 넘치면 글자 크기를 자동으로 줄인다 */
+function Block({ b, height, text, mask, tick }: { b: TextBlock; height: number; text: string; mask: boolean; tick: number }) {
+  const p = useRef<HTMLParagraphElement>(null);
+  const box = useRef<HTMLDivElement>(null);
 
-  const root: CSSProperties = {
-    width: SLIDE_W,
-    height: SLIDE_H,
-    position: "relative",
+  useLayoutEffect(() => {
+    const el = p.current;
+    const wrap = box.current;
+    if (!el || !wrap) return;
+    const pad = b.box ? b.boxPad : 0;
+    const availH = wrap.clientHeight - pad * 2;
+    let fs = b.size;
+    el.style.fontSize = `${fs}px`;
+    const min = Math.max(10, b.size * 0.35);
+    while (fs > min && (el.scrollHeight > availH + 1 || el.scrollWidth > el.clientWidth + 1)) {
+      fs = Math.max(min, fs - Math.max(1, fs * 0.05));
+      el.style.fontSize = `${fs}px`;
+    }
+  }, [text, b.size, b.fontId, b.weight, b.w, b.h, b.lineHeight, b.letterSpacing, b.box, b.boxPad, height, tick]);
+
+  const masked = mask && !b.box && b.behind;
+  const wrapStyle: CSSProperties = {
+    position: "absolute",
+    left: (b.x / 100) * SLIDE_W,
+    top: (b.y / 100) * height,
+    width: (b.w / 100) * SLIDE_W,
+    height: (b.h / 100) * height,
+    boxSizing: "border-box",
+    display: "flex",
+    flexDirection: "column",
+    justifyContent: JUSTIFY[b.vAlign],
+    padding: b.box ? b.boxPad : 0,
+    background: b.box ? rgba(b.boxColor, b.boxOpacity) : masked ? b.behind : undefined,
+    borderRadius: b.box ? b.boxRadius : 0,
+    border: b.box && b.boxBorder ? `1.5px solid ${rgba(b.boxBorderColor, 60)}` : undefined,
     overflow: "hidden",
-    background: "linear-gradient(160deg, #4a4a4a, #1f1f1f)",
-    wordBreak: "keep-all",
-    overflowWrap: "break-word",
   };
-
-  const paragraph = (
-    <p
-      style={{
-        margin: 0,
-        width: "100%",
-        fontFamily: fontStack(style.fontId),
-        fontWeight: 400,
-        fontSize: size,
-        lineHeight: `${Math.round(size * (cover ? 1.23 : 1.1))}px`,
-        color: style.color,
-        textAlign: style.align,
-        whiteSpace: "pre-wrap",
-        textShadow: shadow,
-      }}
-    >
-      {text}
-    </p>
+  return (
+    <div ref={box} style={wrapStyle}>
+      <p
+        ref={p}
+        style={{
+          margin: 0,
+          width: "100%",
+          fontFamily: fontStack(b.fontId),
+          fontWeight: snapWeight(b.fontId, b.weight),
+          lineHeight: b.lineHeight,
+          letterSpacing: `${b.letterSpacing / 100}em`,
+          color: b.color,
+          textAlign: b.align,
+          whiteSpace: "pre-wrap",
+          wordBreak: "keep-all",
+          overflowWrap: "break-word",
+          textShadow: textShadow(b),
+        }}
+      >
+        {withAccent(text, b.accent, b.accentColor)}
+      </p>
+    </div>
   );
+}
 
-  const wm = watermark.trim();
-  const wmTop = template.watermark.pos === "top-left";
+type CanvasProps = { slide: Slide; watermark: WatermarkStyle; adLabel: boolean };
+
+/** 실제 크기(1080×높이)로 그리는 슬라이드. PNG 저장 시 이 요소를 그대로 캡처한다. */
+export const SlideCanvas = forwardRef<HTMLDivElement, CanvasProps>(function SlideCanvas({ slide, watermark, adLabel }, ref) {
+  const tick = useFontsTick();
+  const height = slideHeight(slide.ratio);
+  const wm = watermark.text.trim();
+  const hasHandle = slide.blocks.some((b) => b.role === "handle");
+  const wmTop = watermark.pos === "top-left";
 
   return (
-    <div ref={ref} style={root}>
+    <div
+      ref={ref}
+      style={{
+        width: SLIDE_W,
+        height,
+        position: "relative",
+        overflow: "hidden",
+        background: slide.image ? "#222" : slide.bg || "linear-gradient(160deg, #4a4a4a, #1f1f1f)",
+      }}
+    >
       {slide.image && (
         <img
           src={slide.image}
@@ -123,72 +151,44 @@ export const SlideCanvas = forwardRef<HTMLDivElement, Props>(function SlideCanva
         />
       )}
 
-      {/* (a) 쿠팡 파트너스 고지 — 법에서 요구하는 표시라 항상 넣는다 */}
-      <div
-        style={{
-          position: "absolute",
-          top: 58,
-          right: 76,
-          fontFamily: SMALL_FONT,
-          fontSize: 30,
-          fontWeight: 400,
-          lineHeight: 1.2,
-          color: "rgba(255, 255, 255, 0.72)",
-          textShadow: "0 1px 3px rgba(0,0,0,0.25)",
-        }}
-      >
-        [광고]
-      </div>
+      {slide.blocks.map((b) => {
+        // 계정 이름 자리에는 내 워터마크 문구가 들어간다
+        const text = b.role === "handle" && wm ? wm : b.text;
+        if (!text.trim()) return null;
+        return <Block key={b.id} b={b} height={height} text={text} mask={!!slide.maskOriginal} tick={tick} />;
+      })}
 
-      {/* (b) 글 (표지는 제목, 그 뒤는 본문) */}
-      {text && (
+      {/* 쿠팡 파트너스 고지 — 광고 게시물이면 꼭 넣는다 */}
+      {adLabel && (
         <div
           style={{
             position: "absolute",
-            inset: 0,
-            display: "flex",
-            flexDirection: "column",
-            justifyContent: JUSTIFY[style.pos],
-            padding: `${inset.y}px ${inset.x}px`,
-            boxSizing: "border-box",
+            top: 58,
+            right: 76,
+            fontFamily: SMALL_FONT,
+            fontSize: 30,
+            lineHeight: 1.2,
+            color: "rgba(255, 255, 255, 0.72)",
+            textShadow: "0 1px 3px rgba(0,0,0,0.25)",
           }}
         >
-          {style.box ? (
-            <div
-              style={{
-                width: "100%",
-                minHeight: 258,
-                boxSizing: "border-box",
-                padding: "28px 30px",
-                background: rgba(style.boxColor, style.boxOpacity),
-                border: style.boxBorder ? "1.5px solid rgba(0, 0, 0, 0.6)" : "none",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-              }}
-            >
-              {paragraph}
-            </div>
-          ) : (
-            paragraph
-          )}
+          [광고]
         </div>
       )}
 
-      {/* (c) 워터마크 */}
-      {wm && (
+      {wm && !hasHandle && (
         <div
           style={{
             position: "absolute",
-            left: template.watermark.pos === "bottom" ? 0 : 77,
-            right: template.watermark.pos === "bottom" ? 0 : undefined,
-            top: wmTop ? 58 : 1264,
-            textAlign: template.watermark.pos === "bottom" ? "center" : "left",
-            fontFamily: fontStack(template.watermark.fontId),
-            fontSize: 31,
-            fontWeight: 400,
+            left: watermark.pos === "bottom" ? 0 : 77,
+            right: watermark.pos === "bottom" ? 0 : undefined,
+            top: wmTop ? 58 : undefined,
+            bottom: wmTop ? undefined : Math.round(height * 0.034),
+            textAlign: watermark.pos === "bottom" ? "center" : "left",
+            fontFamily: fontStack(watermark.fontId),
+            fontSize: watermark.size || 31,
             lineHeight: 1.3,
-            color: rgba(template.watermark.color, template.watermark.opacity),
+            color: rgba(watermark.color, watermark.opacity),
             textShadow: "0 1px 3px rgba(0,0,0,0.2)",
           }}
         >
@@ -199,13 +199,23 @@ export const SlideCanvas = forwardRef<HTMLDivElement, Props>(function SlideCanva
   );
 });
 
+type PreviewProps = CanvasProps & {
+  overlay?: ReactNode;
+  /** 편집 화면: 글 상자를 눌러 고르고, 끌어서 옮기고, 오른쪽 아래 손잡이로 크기 조절 */
+  selectedId?: string | null;
+  onSelect?: (id: string | null) => void;
+  onMoveBlock?: (id: string, patch: Partial<BlockStyle>) => void;
+};
+
 /** 화면 폭에 맞춰 축소해 보여주는 미리보기 */
-export const SlidePreview = forwardRef<HTMLDivElement, Props & { overlay?: ReactNode }>(function SlidePreview(
-  { overlay, ...props },
+export const SlidePreview = forwardRef<HTMLDivElement, PreviewProps>(function SlidePreview(
+  { overlay, selectedId, onSelect, onMoveBlock, ...props },
   ref,
 ) {
   const box = useRef<HTMLDivElement>(null);
   const [scale, setScale] = useState(0);
+  const height = slideHeight(props.slide.ratio);
+  const drag = useRef<{ id: string; kind: "move" | "size"; sx: number; sy: number; b: BlockStyle } | null>(null);
 
   // 첫 그림 전에 폭을 재야 한다. 안 그러면 한 번 크게 그려졌다가 줄어들어 깜빡인다
   useLayoutEffect(() => {
@@ -218,24 +228,79 @@ export const SlidePreview = forwardRef<HTMLDivElement, Props & { overlay?: React
     return () => ro.disconnect();
   }, []);
 
+  const editable = !!onMoveBlock;
+  const start = (e: RPointerEvent, b: TextBlock, kind: "move" | "size") => {
+    e.stopPropagation();
+    onSelect?.(b.id);
+    drag.current = { id: b.id, kind, sx: e.clientX, sy: e.clientY, b: { ...b } };
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+  };
+  const move = (e: RPointerEvent) => {
+    const d = drag.current;
+    const el = box.current;
+    if (!d || !el || !onMoveBlock) return;
+    const dx = ((e.clientX - d.sx) / el.clientWidth) * 100;
+    const dy = ((e.clientY - d.sy) / el.clientHeight) * 100;
+    const r = (v: number) => Math.round(v * 10) / 10;
+    if (d.kind === "move") {
+      onMoveBlock(d.id, {
+        x: r(Math.min(100 - d.b.w * 0.2, Math.max(-d.b.w * 0.8, d.b.x + dx))),
+        y: r(Math.min(100 - d.b.h * 0.2, Math.max(-d.b.h * 0.8, d.b.y + dy))),
+      });
+    } else {
+      onMoveBlock(d.id, { w: r(Math.max(5, d.b.w + dx)), h: r(Math.max(3, d.b.h + dy)) });
+    }
+  };
+  const end = () => {
+    drag.current = null;
+  };
+
   return (
-    <div ref={box} className="preview-frame">
+    <div ref={box} className="preview-frame" style={{ aspectRatio: `${SLIDE_W} / ${height}` }}>
       <div
         style={{
-          // 변환 전 크기(1080×1350)가 바깥 레이아웃에 영향 주지 않게 띄워 둔다
+          // 변환 전 크기가 바깥 레이아웃에 영향 주지 않게 띄워 둔다
           position: "absolute",
           top: 0,
           left: 0,
           transform: `scale(${scale})`,
           transformOrigin: "top left",
           width: SLIDE_W,
-          height: SLIDE_H,
+          height,
           visibility: scale ? "visible" : "hidden",
         }}
       >
         <SlideCanvas ref={ref} {...props} />
       </div>
-      {/* 화면에만 보이는 덧씌움(로딩 표시 등) — PNG 저장에는 들어가지 않음 */}
+
+      {/* 편집용 손잡이 — 캡처 대상 밖이라 PNG 저장에는 들어가지 않음 */}
+      {editable && (
+        <div className="block-layer" onPointerDown={() => onSelect?.(null)}>
+          {props.slide.blocks.map((b) => (
+            <div
+              key={b.id}
+              className={`block-hit${selectedId === b.id ? " on" : ""}`}
+              style={{ left: `${b.x}%`, top: `${b.y}%`, width: `${b.w}%`, height: `${b.h}%` }}
+              onPointerDown={(e) => start(e, b, "move")}
+              onPointerMove={move}
+              onPointerUp={end}
+              onPointerCancel={end}
+              title="끌어서 옮기기"
+            >
+              {selectedId === b.id && (
+                <span
+                  className="block-handle"
+                  onPointerDown={(e) => start(e, b, "size")}
+                  onPointerMove={move}
+                  onPointerUp={end}
+                  onPointerCancel={end}
+                  title="끌어서 크기 조절"
+                />
+              )}
+            </div>
+          ))}
+        </div>
+      )}
       {overlay}
     </div>
   );

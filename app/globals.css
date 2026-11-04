@@ -528,3 +528,96 @@ input[type="range"] { width: 100%; height: 32px; accent-color: var(--primary); }
   .hot-stats { gap: 8px; font-size: 0.9rem; }
   .hot-actions { flex-direction: column; padding: 8px 8px 0; }
 }
+
+/* ── 글꼴 고르기 ─────────────────────────────────────────── */
+.fp { position: relative; }
+.fp-current {
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  font-size: 1.05rem;
+  min-height: 48px;
+  padding: 10px 14px;
+  background: #fff;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  text-align: left;
+  color: var(--text);
+}
+.fp-caret { font-family: sans-serif; font-size: 0.75rem; color: var(--muted); flex: none; }
+.fp-panel {
+  margin-top: 8px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  background: #fff;
+  padding: 10px;
+  box-shadow: var(--shadow-lg);
+}
+.fp-cats { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0; }
+.fp-cats button {
+  font: inherit; font-size: 0.85rem; font-weight: 600;
+  padding: 5px 12px; border-radius: 999px;
+  border: 1px solid var(--line-strong); background: #fff; color: var(--muted); cursor: pointer;
+}
+.fp-cats button.on { background: var(--primary); border-color: var(--primary); color: #fff; }
+.fp-list { list-style: none; margin: 0; padding: 0; max-height: 340px; overflow-y: auto; }
+.fp-list button {
+  width: 100%;
+  display: flex; flex-direction: column; align-items: flex-start; gap: 2px;
+  padding: 9px 10px; border: 0; border-radius: 8px; background: transparent; cursor: pointer; text-align: left;
+  color: var(--text);
+}
+.fp-list button:hover { background: var(--bg-soft); }
+.fp-list button.on { background: var(--primary-soft); }
+.fp-name { font-size: 0.78rem; color: var(--muted); font-weight: 600; }
+.fp-sample { font-size: 1.35rem; line-height: 1.3; min-height: 1.3em; }
+
+/* ── 미리보기 위 글 상자 손잡이 ───────────────────────────── */
+.block-layer { position: absolute; inset: 0; z-index: 2; }
+.block-hit {
+  position: absolute;
+  cursor: move;
+  touch-action: none;
+  border: 1px dashed transparent;
+  box-sizing: border-box;
+}
+.block-hit:hover { border-color: rgba(47, 107, 255, 0.7); }
+.block-hit.on { border: 2px solid #2f6bff; background: rgba(47, 107, 255, 0.08); }
+.block-handle {
+  position: absolute;
+  right: -9px; bottom: -9px;
+  width: 18px; height: 18px;
+  border-radius: 50%;
+  background: #2f6bff;
+  border: 2px solid #fff;
+  box-shadow: 0 1px 4px rgba(0,0,0,.3);
+  cursor: nwse-resize;
+  touch-action: none;
+}
+
+/* ── 편집 화면 ───────────────────────────────────────────── */
+.btn-sm { min-height: 36px !important; padding: 6px 12px !important; font-size: 0.88rem !important; flex: none !important; }
+.block-field { border: 1px solid var(--line); border-radius: var(--radius-sm); padding: 10px; }
+.block-field.on { border-color: var(--primary); box-shadow: var(--ring); }
+.block-field-head { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; }
+.block-field-head select { flex: 1; min-height: 36px; padding-top: 4px; padding-bottom: 4px; font-size: 0.9rem; }
+.block-field textarea { font-size: 0.95rem; }
+.block-editor { scroll-margin-top: 16px; border-color: var(--primary); }
+.block-editor-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.save-tpl { display: flex; gap: 8px; }
+.save-tpl input { flex: 1; min-width: 0; }
+.save-tpl .btn { flex: none; }
+.seg-wrap { flex-wrap: wrap; }
+.seg-wrap button { flex: 1 1 auto; }
+.sub { padding-left: 14px; border-left: 3px solid var(--line); }
+.duo-tight { display: grid; gap: 12px; grid-template-columns: 1fr 1fr; }
+@media (max-width: 520px) { .duo-tight { grid-template-columns: 1fr; } }
+.range-row { display: flex; align-items: center; gap: 8px; }
+.range-row input[type="range"] { flex: 1; min-width: 0; }
+.range-row input[type="number"] {
+  width: 76px; flex: none; padding: 6px 8px; min-height: 36px;
+  border: 1px solid var(--line-strong); border-radius: 8px; font: inherit; font-size: 0.9rem;
+}

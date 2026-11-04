@@ -1,19 +1,19 @@
 import { getFontEmbedCSS, toBlob } from "html-to-image";
 import JSZip from "jszip";
-import { SLIDE_H, SLIDE_W } from "@/components/SlideCard";
+import { SLIDE_W } from "@/lib/layout";
 
-/** 슬라이드 요소들을 1080×1350 PNG로 만든다. */
+/** 슬라이드 요소들을 실제 크기(폭 1080) PNG로 만든다. 장마다 쓰는 글꼴이 달라서 글꼴은 장마다 심는다. */
 export async function renderSlides(
   nodes: HTMLElement[],
   onProgress?: (done: number) => void,
 ): Promise<Blob[]> {
   await document.fonts.ready;
-  const fontEmbedCSS = await getFontEmbedCSS(nodes[0]);
   const blobs: Blob[] = [];
   for (const node of nodes) {
+    const fontEmbedCSS = await getFontEmbedCSS(node);
     const blob = await toBlob(node, {
       width: SLIDE_W,
-      height: SLIDE_H,
+      height: node.offsetHeight,
       pixelRatio: 1,
       fontEmbedCSS,
       cacheBust: false,

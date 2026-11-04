@@ -2,15 +2,16 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { SlidePreview } from "./SlideCard";
+import StylePanel from "./StylePanel";
+import FontPicker from "./FontPicker";
+import { ColorField, Range, Seg, TEXT_COLORS, Toggle } from "./controls";
 import { buildCaption } from "@/lib/caption";
 import { buildDm, type DmContent } from "@/lib/dm";
-import { FONTS, loadFonts } from "@/lib/webfonts";
+import { loadFonts } from "@/lib/webfonts";
+import { ROLES, ROLE_LABEL, type BlockStyle, type TextBlock, type TextRole } from "@/lib/layout";
 import {
-  ALIGN_LABEL,
   BUILTIN_TEMPLATES,
   DEFAULT_TEMPLATE,
-  SIZE_LABEL,
-  VPOS_LABEL,
   WATERMARK_POS_LABEL,
   allTemplates,
   duplicateTemplate,
@@ -19,25 +20,40 @@ import {
   saveUserTemplates,
   templateFontIds,
   uniqueName,
-  type Align,
   type CaptionStyle,
   type DmStyle,
   type Template,
-  type TextSize,
-  type TextStyle,
-  type VPos,
   type WatermarkStyle,
 } from "@/lib/templates";
 import type { Slide } from "@/lib/types";
 
-/** 미리보기에 쓰는 보기글 */
-const SAMPLE: Record<Side, Slide> = {
-  cover: { image: null, original: "", title: "자꾸 생각나는\n떡볶이 맛집", body: "" },
-  body: { image: null, original: "", title: "", body: "매콤달콤한 양념에\n쫄깃한 떡이 가득" },
-};
-
 type Side = "cover" | "body";
 const SIDE_LABEL: Record<Side, string> = { cover: "표지 (1번 장)", body: "내지 (2번 장부터)" };
+
+/** 미리보기에 쓰는 역할별 보기글 */
+const SAMPLE_TEXT: Record<TextRole, string> = {
+  title: "자꾸 생각나는\n떡볶이 맛집",
+  subtitle: "요즘 가장 핫한 그곳",
+  body: "매콤달콤한 양념에\n쫄깃한 떡이 가득",
+  label: "EDITOR'S PICK",
+  number: "01",
+  source: "출처: 카드뉴스 연구소",
+  handle: "@my_account",
+  other: "기타 글",
+};
+
+/** 템플릿으로 보기 슬라이드 만들기: 표지는 본문 빼고, 내지는 제목 빼고 템플릿에 있는 역할을 모두 보여 준다 */
+function sampleSlide(t: Template, side: Side): Slide {
+  const blocks: TextBlock[] = ROLES.filter((r) => t.styles[r] && (side === "cover" ? r !== "body" : r !== "title")).map((r) => ({
+    ...(t.styles[r] as BlockStyle),
+    id: `sample-${r}`,
+    role: r,
+    original: "",
+    text: SAMPLE_TEXT[r],
+    accent: r === "title" ? "떡볶이" : r === "body" ? "쫄깃한" : "",
+  }));
+  return { image: null, original: "", ratio: 1.25, bg: "#3a3a3a", blocks };
+}
 
 /** 캡션 CTA 미리보기에 쓰는 보기글 (AI가 쓰는 본문 자리) */
 const SAMPLE_CAPTION_BODY =
@@ -57,8 +73,6 @@ const SAMPLE_DM: DmContent = {
   tip: "비밀재료를 꼭 넣어야 감칠맛이 터지고 까만 양념장이 완성돼요!",
 };
 
-const TEXT_COLORS = ["#ffffff", "#1c1c1e", "#ffe14d", "#ff5a3c", "#2f6bff", "#1b7f3a"];
-const BOX_COLORS = ["#ffffff", "#000000", "#1c1c1e", "#ffe14d", "#2f6bff", "#c62828"];
 
 type Props = {
   /** 편집기 위에 겹쳐 띄운 경우 — 닫기 버튼과 '쓰고 닫기'를 보여 준다 */
@@ -72,6 +86,7 @@ export default function TemplateManager({ onClose, onPick }: Props) {
   const [activeId, setActiveId] = useState(DEFAULT_TEMPLATE.id);
   const [draft, setDraft] = useState<Template | null>(null);
   const [side, setSide] = useState<Side>("cover");
+  const [role, setRole] = useState<TextRole>("title");
   const [askDelete, setAskDelete] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
 
@@ -107,17 +122,20 @@ export default function TemplateManager({ onClose, onPick }: Props) {
     const t = duplicateTemplate(DEFAULT_TEMPLATE, uniqueName(templates, "내 디자인"));
     setDraft(t);
     setSide("cover");
+    setRole("title");
   };
 
   const copy = (base: Template) => {
     const t = duplicateTemplate(base, uniqueName(templates, `${base.name} 복사본`));
     setDraft(t);
     setSide("cover");
+    setRole("title");
   };
 
   const edit = (t: Template) => {
     setDraft(structuredClone(t));
     setSide("cover");
+    setRole("title");
   };
 
   const save = () => {
@@ -140,8 +158,21 @@ export default function TemplateManager({ onClose, onPick }: Props) {
     say("템플릿을 지웠어요.");
   };
 
-  const patch = (s: Side, p: Partial<TextStyle>) =>
-    setDraft((d) => (d ? { ...d, [s]: { ...d[s], ...p } } : d));
+  const patch = (r: TextRole, p: Partial<BlockStyle>) =>
+    setDraft((d) => (d && d.styles[r] ? { ...d, styles: { ...d.styles, [r]: { ...d.styles[r]!, ...p } } } : d));
+  const addRole = (r: TextRole) =>
+    setDraft((d) => {
+      if (!d) return d;
+      const st: BlockStyle = { ...d.styles.title, size: r === "subtitle" ? 44 : 32, y: 8, h: 8, vAlign: "top", box: false };
+      return { ...d, styles: { ...d.styles, [r]: st } };
+    });
+  const removeRole = (r: TextRole) =>
+    setDraft((d) => {
+      if (!d || r === "title" || r === "body") return d;
+      const styles = { ...d.styles };
+      delete styles[r];
+      return { ...d, styles };
+    });
   const patchWm = (p: Partial<WatermarkStyle>) =>
     setDraft((d) => (d ? { ...d, watermark: { ...d.watermark, ...p } } : d));
   const patchCaption = (p: Partial<CaptionStyle>) =>
@@ -151,28 +182,33 @@ export default function TemplateManager({ onClose, onPick }: Props) {
 
   // ── 편집 화면 ───────────────────────────────────────────────
   if (draft) {
-    const st = draft[side];
+    const st = draft.styles[role] ?? draft.styles.title;
+    const sample = sampleSlide(draft, side);
+    const roles = ROLES.filter((r) => draft.styles[r]);
+    const missing = ROLES.filter((r) => !draft.styles[r]);
     return (
       <div>
         <h1>템플릿 고치기</h1>
-        <p className="lead">오른쪽에서 바꾸면 왼쪽 미리보기에 바로 나타나요.</p>
+        <p className="lead">역할(제목·본문…)을 고르고 오른쪽에서 바꾸면 왼쪽 미리보기에 바로 나타나요. 미리보기에서 글을 끌어 옮길 수도 있어요.</p>
 
         <div className="split">
           {/* 왼쪽: 바뀌는 걸 바로 보는 미리보기 (PC는 화면에 고정, 모바일은 위에 붙음) */}
           <div className="sticky">
             <div className="seg seg-big" role="tablist" aria-label="표지와 내지 고르기">
-              {(["cover", "body"] as Side[]).map((s) => (
-                <button key={s} role="tab" aria-selected={side === s} className={side === s ? "on" : ""} onClick={() => setSide(s)}>
-                  {SIDE_LABEL[s]}
+              {(["cover", "body"] as Side[]).map((sd) => (
+                <button key={sd} role="tab" aria-selected={side === sd} className={side === sd ? "on" : ""} onClick={() => setSide(sd)}>
+                  {SIDE_LABEL[sd]}
                 </button>
               ))}
             </div>
             <section className="card">
               <SlidePreview
-                slide={SAMPLE[side]}
-                index={side === "cover" ? 0 : 1}
-                watermark={draft.watermark.text}
-                template={draft}
+                slide={sample}
+                watermark={draft.watermark}
+                adLabel={draft.adLabel}
+                selectedId={`sample-${role}`}
+                onSelect={(id) => id && setRole(id.replace("sample-", "") as TextRole)}
+                onMoveBlock={(id, p) => patch(id.replace("sample-", "") as TextRole, p)}
               />
             </section>
           </div>
@@ -193,88 +229,39 @@ export default function TemplateManager({ onClose, onPick }: Props) {
         </section>
 
         <section className="card stack">
-          <h2 style={{ margin: 0 }}>{SIDE_LABEL[side]} 글자</h2>
-
-          <div>
-            <label className="field-label" htmlFor={`font-${side}`}>글꼴</label>
-            <select id={`font-${side}`} value={st.fontId} onChange={(e) => patch(side, { fontId: e.target.value })}>
-              {FONTS.map((f) => (
-                <option key={f.id} value={f.id}>{f.label}</option>
-              ))}
-            </select>
+          <h2 style={{ margin: 0 }}>글 모양 (역할별)</h2>
+          <div className="seg seg-wrap" role="tablist" aria-label="역할 고르기">
+            {roles.map((r) => (
+              <button
+                key={r}
+                role="tab"
+                aria-selected={role === r}
+                className={role === r ? "on" : ""}
+                onClick={() => {
+                  setRole(r);
+                  if (r === "title") setSide("cover");
+                  if (r === "body") setSide("body");
+                }}
+              >
+                {ROLE_LABEL[r]}
+              </button>
+            ))}
           </div>
-
-          <Seg<TextSize>
-            label="글자 크기"
-            value={st.size}
-            options={["small", "normal", "large"]}
-            labels={SIZE_LABEL}
-            onChange={(v) => patch(side, { size: v })}
-          />
-
-          <ColorField
-            label="글자색"
-            value={st.color}
-            presets={TEXT_COLORS}
-            onChange={(v) => patch(side, { color: v })}
-          />
-
-          <Toggle
-            label="글자 테두리"
-            hint="사진 위에서도 글씨가 또렷하게 보여요"
-            checked={st.outline}
-            onChange={(v) => patch(side, { outline: v })}
-          />
-
-          <Seg<VPos>
-            label="글 위치"
-            value={st.pos}
-            options={["top", "middle", "bottom"]}
-            labels={VPOS_LABEL}
-            onChange={(v) => patch(side, { pos: v })}
-          />
-
-          <Seg<Align>
-            label="글 정렬"
-            value={st.align}
-            options={["left", "center", "right"]}
-            labels={ALIGN_LABEL}
-            onChange={(v) => patch(side, { align: v })}
-          />
-        </section>
-
-        <section className="card stack">
-          <h2 style={{ margin: 0 }}>{SIDE_LABEL[side]} 글상자</h2>
-          <Toggle
-            label="글상자 쓰기"
-            hint="글 뒤에 네모난 바탕을 깔아요"
-            checked={st.box}
-            onChange={(v) => patch(side, { box: v })}
-          />
-          {st.box && (
-            <>
-              <ColorField
-                label="글상자 색"
-                value={st.boxColor}
-                presets={BOX_COLORS}
-                onChange={(v) => patch(side, { boxColor: v })}
-              />
-              <div>
-                <label className="field-label" htmlFor={`op-${side}`}>
-                  글상자 진하기 <span className="muted small">{st.boxOpacity}%</span>
-                </label>
-                <input
-                  id={`op-${side}`}
-                  type="range"
-                  min={0}
-                  max={100}
-                  value={st.boxOpacity}
-                  onChange={(e) => patch(side, { boxOpacity: Number(e.target.value) })}
-                />
-              </div>
-              <Toggle label="글상자 테두리" checked={st.boxBorder} onChange={(v) => patch(side, { boxBorder: v })} />
-            </>
+          {missing.length > 0 && (
+            <div className="row">
+              <select value="" onChange={(e) => { const r = e.target.value as TextRole; if (r) { addRole(r); setRole(r); } }} aria-label="역할 추가">
+                <option value="">➕ 다른 역할 모양도 정하기…</option>
+                {missing.map((r) => <option key={r} value={r}>{ROLE_LABEL[r]}</option>)}
+              </select>
+              {role !== "title" && role !== "body" && (
+                <button className="btn btn-secondary" onClick={() => { removeRole(role); setRole("title"); }}>이 역할 빼기</button>
+              )}
+            </div>
           )}
+          <p className="muted small" style={{ margin: 0 }}>
+            레시피 모드는 표지에 <b>제목</b>, 2번 장부터 <b>본문</b>을 써요. 원본 디자인 모드는 AI가 찾은 글마다 역할이 붙어서, 여기서 정한 역할 모양이 입혀져요.
+          </p>
+          <StylePanel style={st} sample={SAMPLE_TEXT[role].split("\n")[0]} onChange={(p) => patch(role, p)} />
         </section>
 
         <section className="card stack">
@@ -291,13 +278,10 @@ export default function TemplateManager({ onClose, onPick }: Props) {
             />
           </div>
           <div>
-            <label className="field-label" htmlFor="wm-font">글꼴</label>
-            <select id="wm-font" value={draft.watermark.fontId} onChange={(e) => patchWm({ fontId: e.target.value })}>
-              {FONTS.map((f) => (
-                <option key={f.id} value={f.id}>{f.label}</option>
-              ))}
-            </select>
+            <span className="field-label">글꼴</span>
+            <FontPicker value={draft.watermark.fontId} onChange={(fontId) => patchWm({ fontId })} sample={draft.watermark.text} />
           </div>
+          <Range label="크기" value={draft.watermark.size} min={14} max={80} unit="px" onChange={(size) => patchWm({ size })} />
           <ColorField label="글자색" value={draft.watermark.color} presets={TEXT_COLORS} onChange={(v) => patchWm({ color: v })} />
           <div>
             <label className="field-label" htmlFor="wm-op">
@@ -319,9 +303,12 @@ export default function TemplateManager({ onClose, onPick }: Props) {
             labels={WATERMARK_POS_LABEL}
             onChange={(v) => patchWm({ pos: v })}
           />
-          <p className="muted small" style={{ margin: 0 }}>
-            오른쪽 위 <b>[광고]</b> 표시는 쿠팡 파트너스 규정상 꼭 들어가야 해서 항상 붙어요.
-          </p>
+          <Toggle
+            label="오른쪽 위 [광고] 표시"
+            hint="쿠팡 파트너스·협찬 게시물은 꼭 켜 두세요"
+            checked={draft.adLabel}
+            onChange={(adLabel) => setDraft({ ...draft, adLabel })}
+          />
         </section>
 
         <section className="card stack">
@@ -413,7 +400,7 @@ export default function TemplateManager({ onClose, onPick }: Props) {
     <div>
       <h1>디자인 템플릿</h1>
       <p className="lead">
-        표지와 내지의 글꼴·색·글상자를 미리 정해 두고, 카드뉴스를 만들 때 골라 쓰세요.
+        제목·본문 같은 역할마다 글꼴·굵기·크기·색·위치·글상자를 미리 정해 두고, 카드뉴스를 만들 때 골라 쓰세요.
       </p>
 
       {toast && <div className="notice notice-info" role="status">{toast}</div>}
@@ -426,8 +413,8 @@ export default function TemplateManager({ onClose, onPick }: Props) {
               {activeId === t.id && <span className="badge">지금 쓰는 중</span>}
             </div>
             <div className="tpl-shots">
-              <SlidePreview slide={SAMPLE.cover} index={0} watermark={t.watermark.text} template={t} />
-              <SlidePreview slide={SAMPLE.body} index={1} watermark={t.watermark.text} template={t} />
+              <SlidePreview slide={sampleSlide(t, "cover")} watermark={t.watermark} adLabel={t.adLabel} />
+              <SlidePreview slide={sampleSlide(t, "body")} watermark={t.watermark} adLabel={t.adLabel} />
             </div>
             <div className="row" style={{ marginTop: 18 }}>
               <button className="btn btn-primary" onClick={() => use(t.id)} disabled={activeId === t.id}>
@@ -464,90 +451,5 @@ export default function TemplateManager({ onClose, onPick }: Props) {
         </div>
       )}
     </div>
-  );
-}
-
-function Seg<T extends string>({
-  label,
-  value,
-  options,
-  labels,
-  onChange,
-}: {
-  label: string;
-  value: T;
-  options: T[];
-  labels: Record<T, string>;
-  onChange: (v: T) => void;
-}) {
-  return (
-    <div>
-      <span className="field-label">{label}</span>
-      <div className="seg">
-        {options.map((o) => (
-          <button key={o} className={value === o ? "on" : ""} onClick={() => onChange(o)} aria-pressed={value === o}>
-            {labels[o]}
-          </button>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function ColorField({
-  label,
-  value,
-  presets,
-  onChange,
-}: {
-  label: string;
-  value: string;
-  presets: string[];
-  onChange: (v: string) => void;
-}) {
-  return (
-    <div>
-      <span className="field-label">{label}</span>
-      <div className="swatches">
-        {presets.map((c) => (
-          <button
-            key={c}
-            className={`swatch${value.toLowerCase() === c ? " on" : ""}`}
-            style={{ background: c }}
-            onClick={() => onChange(c)}
-            aria-label={c}
-          />
-        ))}
-        <input
-          type="color"
-          className="swatch swatch-pick"
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          aria-label={`${label} 직접 고르기`}
-        />
-      </div>
-    </div>
-  );
-}
-
-function Toggle({
-  label,
-  hint,
-  checked,
-  onChange,
-}: {
-  label: string;
-  hint?: string;
-  checked: boolean;
-  onChange: (v: boolean) => void;
-}) {
-  return (
-    <label className="toggle">
-      <input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} />
-      <span>
-        <b>{label}</b>
-        {hint && <span className="muted small"> — {hint}</span>}
-      </span>
-    </label>
   );
 }

@@ -255,7 +255,53 @@ function textPrompt(topic: string) {
   ].join("\n");
 }
 
-export type ImageGenRequest = { image?: string | null; title?: string; body?: string };
+/**
+ * '원본 디자인 그대로' 모드: 슬라이드 전체에서 글자만 지우고 디자인(도형·띠·글상자·사진 배치)은 그대로,
+ * 사진 부분만 구도를 살짝 바꾼다. 음식·패션·정치·시사·매거진 등 어떤 주제든 같은 프롬프트.
+ */
+function designPrompt() {
+  return [
+    "Edit this Instagram card-news slide image. Three jobs:",
+    "",
+    "1) REMOVE ALL TEXT. Erase every letter, number, Korean or English character, title, caption, @handle, watermark,",
+    '   page number, "[광고]" label and text-logo that is laid over the design. Fill each erased area with what is naturally',
+    "   behind it — continue the background color, gradient, pattern, texture or photo seamlessly. Do not add any new text.",
+    "   (Text that physically belongs to an object in a photo — a product package, a sign — may stay.)",
+    "",
+    "2) KEEP THE DESIGN EXACTLY. Every non-text design element stays in the same place, size and color:",
+    "   background colors and gradients, color bands, text boxes / speech bubbles / highlight bars (leave them EMPTY),",
+    "   shapes, lines, frames, borders, icons, stickers, illustrations, and where each photo sits and how it is cropped.",
+    "",
+    "3) PHOTOS: inside each photo area show the same subject with a slightly different composition",
+    "   (a little different angle, crop or arrangement), keeping the same colors, lighting, white balance and mood.",
+    "   - Food: same dish, same ingredients and colors, just as appetizing.",
+    "   - Fashion / beauty / products: the exact same item — same design, color, pattern, material and printed logos.",
+    "   - Real people, news, politics, events, documents or screenshots: do NOT change the people (identity, face,",
+    "     expression, clothing, pose) or what happened. Do not add or remove people or objects. Only remove overlaid text.",
+    "",
+    "Photorealistic and natural; it must not look AI-generated. No new text, letters or watermarks anywhere.",
+    "원본 디자인(배경·도형·띠·글상자·사진 위치)은 그대로 두고, 얹힌 글자만 전부 지워라. 사진은 같은 대상을 구도만 살짝 바꿔라.",
+  ].join("\n");
+}
+
+/** gpt-image-2.5 는 임의 크기(16의 배수)를 받으므로 원본 비율 그대로, 그 외는 가까운 표준 크기 */
+function sizeFor(ratio: number): string {
+  if (/^gpt-image-2\.5/.test(IMAGE_MODEL)) {
+    const w = 1088;
+    return `${w}x${Math.round((w * ratio) / 16) * 16}`;
+  }
+  return ratio > 1.15 ? "1024x1536" : ratio < 0.85 ? "1536x1024" : "1024x1024";
+}
+
+export type ImageGenRequest = {
+  image?: string | null;
+  title?: string;
+  body?: string;
+  /** food: 레시피 사진(기본) / design: 원본 디자인 그대로 글자만 지운 슬라이드 */
+  mode?: "food" | "design";
+  /** design 모드: 슬라이드에서 사진이 차지하는 비율 0~100 (색감 맞추기 여부) */
+  photoShare?: number;
+};
 
 function parseDataUrl(d: string): { type: string; data: Buffer } {
   const m = d.match(/^data:(image\/(?:jpeg|png|webp));base64,(.+)$/);
@@ -267,7 +313,7 @@ function parseDataUrl(d: string): { type: string; data: Buffer } {
  * 슬라이드 사진을 '원본처럼 사실적이지만 구도·배경·배치만 바뀐, 글자 없는' 새 사진으로 바꾼다.
  * 원본 사진이 없으면 슬라이드 글로 만든다. 결과는 JPEG data URL.
  */
-export async function remakeSlideImage({ image, title = "", body = "" }: ImageGenRequest): Promise<string> {
+export async function remakeSlideImage({ image, title = "", body = "", mode = "food", photoShare = 100 }: ImageGenRequest): Promise<string> {
   const topic = `${title}\n${body}`.trim();
   if (!image && !topic) throw new UserFacingError("먼저 사진을 넣거나 글을 적어 주세요.");
   const source = image ? parseDataUrl(image) : null;
@@ -285,6 +331,29 @@ export async function remakeSlideImage({ image, title = "", body = "" }: ImageGe
   const client = openai({ maxRetries: 0, timeout: 150_000 });
 
   let res;
+  if (mode === "design" && source) {
+    const meta = await sharp(source.data).metadata();
+    const ratio = (meta.height ?? 1350) / (meta.width ?? 1080);
+    const file = await toFile(await sharp(source.data).rotate().png().toBuffer(), "slide.png", { type: "image/png" });
+    const edit = (fidelity: boolean) =>
+      client.images.edit({
+        ...common,
+        size: sizeFor(ratio) as typeof common.size,
+        image: file,
+        prompt: designPrompt(),
+        ...(fidelity ? { input_fidelity: "high" as const } : {}),
+      });
+    res = await edit(true).catch((e) => {
+      if (e instanceof OpenAI.APIError && e.status === 400 && /fidelity/i.test(e.message)) return edit(false);
+      throw e;
+    });
+    const b64 = res.data?.[0]?.b64_json;
+    if (!b64) throw new UserFacingError("새 사진을 만들지 못했어요. 다시 한 번 눌러 주세요.");
+    const raw = Buffer.from(b64, "base64");
+    // 사진이 대부분인 장만 색감을 원본에 맞춘다 (도형·글상자 위주 디자인은 색이 틀어질 수 있어 그대로)
+    const matched = photoShare >= 40 ? await matchColors(raw, source.data).catch(() => null) : null;
+    return `data:image/jpeg;base64,${(matched ?? raw).toString("base64")}`;
+  }
   if (!source) {
     res = await client.images.generate({ ...common, prompt: textPrompt(topic) });
   } else {
