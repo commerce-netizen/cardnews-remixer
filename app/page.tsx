@@ -10,11 +10,6 @@ import { SLIDE_W, clampRatio, newBlock, slideHeight, styleOf, type LayoutResult 
 import { allTemplates, findTemplate, loadActiveId } from "@/lib/templates";
 import type { ExtractResult, Mode, RemixRequest, RemixResult, Slide } from "@/lib/types";
 
-const MODE_KEY = "cardnews.mode";
-const MODES: { key: Mode; label: string; hint: string }[] = [
-  { key: "design", label: "🎨 어떤 카드뉴스든", hint: "음식·패션·정치·시사·매거진 등 영상 없는 카드뉴스 전부. 원본 구성(사진·글 위치)을 읽어서 새 사진·새 글로 다시 만들고, 글은 템플릿으로 마음대로 꾸며요." },
-  { key: "recipe", label: "🍳 레시피 (쿠팡)", hint: "쿠팡 파트너스 레시피 카드뉴스. 표지 제목 + 장마다 본문 3줄, 캡션 CTA·고정 댓글·자동 DM까지." },
-];
 
 /** 사진 비율(높이÷폭) */
 function imageRatio(src: string | null): Promise<number> {
@@ -71,22 +66,10 @@ export default function Home() {
   // AI가 각색한 캡션 본문 (CTA·고지 문구는 Editor가 템플릿대로 붙인다)
   const [caption, setCaption] = useState("");
   const [dmContent, setDmContent] = useState<DmContent | null>(null);
-  const [mode, setModeState] = useState<Mode>("design");
+  // 어떤 방식으로 만들었는지 (사용자가 고르지 않음: 사진이 있으면 원본 구성 분석, 글만 있으면 레시피 각색)
   const [usedMode, setUsedMode] = useState<Mode>("design");
   const [commerce, setCommerce] = useState(false);
-
-  useEffect(() => {
-    try {
-      const m = localStorage.getItem(MODE_KEY);
-      if (m === "design" || m === "recipe") setModeState(m);
-    } catch {}
-  }, []);
-  const setMode = (m: Mode) => {
-    setModeState(m);
-    try {
-      localStorage.setItem(MODE_KEY, m);
-    } catch {}
-  };
+  const [recipe, setRecipe] = useState(false);
 
   /**
    * 글 각색과 AI 새 사진을 **동시에** 돌린다.
@@ -231,8 +214,9 @@ export default function Home() {
         }),
       );
       setCaption(r.caption);
-      setDmContent(null);
-      setCommerce(r.commerce);
+      setDmContent(r.dm);
+      setCommerce(r.commerce || r.recipe);
+      setRecipe(r.recipe);
       setUsedMode("design");
       setSource(src);
       setInfo(
@@ -248,7 +232,8 @@ export default function Home() {
     }
   };
 
-  const run = (src: Source, back: Step) => (mode === "design" ? runDesign(src, back) : runRemix(src, back));
+  // 종류는 사용자가 고르지 않는다 — 사진이 있으면 AI가 원본을 보고 판단(레시피면 DM까지), 글만 있으면 레시피 각색
+  const run = (src: Source, back: Step) => runDesign(src, back);
 
   const startFromUrl = async (target = url) => {
     if (!target.trim()) {
@@ -354,8 +339,6 @@ export default function Home() {
 
           {error && <div className="notice notice-error" role="alert">{error}</div>}
 
-          <ModePicker mode={mode} onChange={setMode} />
-
           <div className="card stack">
             <label className="field-label" htmlFor="url">인스타그램 게시물 주소</label>
             <input
@@ -391,8 +374,6 @@ export default function Home() {
 
           {info && <div className="notice notice-info" style={{ whiteSpace: "pre-line" }}>{info}</div>}
           {error && <div className="notice notice-error" role="alert">{error}</div>}
-
-          <ModePicker mode={mode} onChange={setMode} />
 
           <section className="card stack">
             <h2 style={{ margin: 0 }}>① 카드뉴스 사진 (최대 10장)</h2>
@@ -448,6 +429,7 @@ export default function Home() {
         <Editor
           mode={usedMode}
           commerce={commerce}
+          recipe={recipe}
           slides={slides}
           captionBody={caption}
           dmContent={dmContent}
@@ -465,18 +447,3 @@ export default function Home() {
   );
 }
 
-function ModePicker({ mode, onChange }: { mode: Mode; onChange: (m: Mode) => void }) {
-  return (
-    <section className="card stack">
-      <span className="field-label" style={{ margin: 0 }}>어떤 카드뉴스를 만들까요?</span>
-      <div className="seg seg-big" role="tablist" aria-label="만드는 방식" style={{ marginBottom: 0 }}>
-        {MODES.map((m) => (
-          <button key={m.key} role="tab" aria-selected={mode === m.key} className={mode === m.key ? "on" : ""} onClick={() => onChange(m.key)}>
-            {m.label}
-          </button>
-        ))}
-      </div>
-      <p className="muted small" style={{ margin: 0 }}>{MODES.find((m) => m.key === mode)?.hint}</p>
-    </section>
-  );
-}

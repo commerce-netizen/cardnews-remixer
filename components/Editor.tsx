@@ -54,6 +54,8 @@ type Props = {
   dmContent: DmContent | null;
   /** 광고·쿠팡 파트너스 게시물로 보이는지 (원본 디자인 모드) */
   commerce: boolean;
+  /** AI가 쿠팡 레시피 게시물로 판단 → 템플릿 CTA·고정 댓글·자동 DM까지 */
+  recipe?: boolean;
   onChangeSlides: Dispatch<SetStateAction<Slide[]>>;
   onRemixAgain: () => void;
   onRestart: () => void;
@@ -61,8 +63,10 @@ type Props = {
 
 type Sel = { slide: number; id: string } | null;
 
-export default function Editor({ mode, slides, captionBody, dmContent, commerce, onChangeSlides, onRemixAgain, onRestart }: Props) {
+export default function Editor({ mode, slides, captionBody, dmContent, commerce, recipe = false, onChangeSlides, onRemixAgain, onRestart }: Props) {
   const design = mode === "design";
+  // 캡션 CTA·고정 댓글·DM이 필요한 쿠팡 레시피 게시물인지 (레시피 각색이거나 AI가 그렇게 판단)
+  const coupang = !design || recipe;
   const [caption, setCaption] = useState("");
   const [dm, setDm] = useState("");
   const [dmCopied, setDmCopied] = useState(false);
@@ -129,15 +133,15 @@ export default function Editor({ mode, slides, captionBody, dmContent, commerce,
   // 캡션: 레시피 모드 = 템플릿 CTA + AI 본문 + 쿠팡 고지 / 원본 디자인 모드 = AI 캡션 (+ 고지)
   useEffect(() => {
     setCaption(
-      design ? [captionBody.trim(), disclose ? DISCLOSURE : ""].filter(Boolean).join("\n\n") : buildCaption(captionBody, template),
+      coupang ? buildCaption(captionBody, template) : [captionBody.trim(), disclose ? DISCLOSURE : ""].filter(Boolean).join("\n\n"),
     );
     setResults(null);
-  }, [captionBody, template, design, disclose]);
+  }, [captionBody, template, coupang, disclose]);
 
   useEffect(() => {
-    setDm(design ? "" : buildDm(dmContent, template));
-    setPinned(design ? "" : template.pinnedComment);
-  }, [dmContent, template, design]);
+    setDm(coupang ? buildDm(dmContent, template) : "");
+    setPinned(coupang ? template.pinnedComment : "");
+  }, [dmContent, template, coupang]);
 
   const setSlides = (fn: (prev: Slide[]) => Slide[]) => {
     onChangeSlides(fn);
@@ -376,7 +380,7 @@ export default function Editor({ mode, slides, captionBody, dmContent, commerce,
           </div>
           <Range label="워터마크 크기" value={watermark.size} min={14} max={80} unit="px" onChange={(size) => setWatermark({ ...watermark, size })} />
           <Toggle label="[광고] 표시" hint="쿠팡 파트너스·협찬 게시물이면 꼭 켜 두세요" checked={adLabel} onChange={(v) => { setAdLabel(v); setResults(null); }} />
-          {design && (
+          {!coupang && (
             <Toggle label="캡션에 쿠팡 파트너스 고지 붙이기" checked={disclose} onChange={setDisclose} />
           )}
         </section>
@@ -527,7 +531,7 @@ export default function Editor({ mode, slides, captionBody, dmContent, commerce,
         <section className="card">
           <h2>캡션 (본문 글)</h2>
           <textarea rows={12} value={caption} onChange={(e) => { setCaption(e.target.value); setResults(null); }} aria-label="캡션" />
-          {!design && (
+          {coupang && (
             <p className="muted small" style={{ margin: "12px 0 0" }}>
               맨 윗줄·맨 아랫줄 문구는 <b>템플릿</b>에서 바꿀 수 있어요. 여기서 고친 건 이번 한 번만 적용돼요.
             </p>
@@ -537,7 +541,7 @@ export default function Editor({ mode, slides, captionBody, dmContent, commerce,
           </button>
         </section>
 
-        {!design && (
+        {coupang && (
           <section className="card">
             <h2>고정 댓글</h2>
             <p className="muted small" style={{ margin: "0 0 14px" }}>
@@ -569,7 +573,7 @@ export default function Editor({ mode, slides, captionBody, dmContent, commerce,
         <section className="card" style={{ borderColor: "var(--ok)" }}>
           <h2>완성! 🎉</h2>
           <p>
-            컴퓨터에는 <b>압축 파일(zip)</b>로 저장됐어요. 사진과 함께 <b>캡션{design ? "" : "·고정 댓글·자동 DM"} 글</b>도 들어 있어요. 휴대폰에서는 아래 사진을 <b>길게 눌러 저장</b>하거나 저장 버튼을 누르세요.
+            컴퓨터에는 <b>압축 파일(zip)</b>로 저장됐어요. 사진과 함께 <b>캡션{coupang ? "·고정 댓글·자동 DM" : ""} 글</b>도 들어 있어요. 휴대폰에서는 아래 사진을 <b>길게 눌러 저장</b>하거나 저장 버튼을 누르세요.
           </p>
           <div className="thumbs">
             {results.map((u, i) => (

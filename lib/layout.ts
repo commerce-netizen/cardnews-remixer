@@ -205,6 +205,9 @@ export type LayoutResult = {
   caption: string;
   /** 쿠팡 파트너스·광고 게시물로 보이는지 */
   commerce: boolean;
+  /** 쿠팡 파트너스 레시피 게시물로 판단됨 → 캡션 CTA·고정 댓글·자동 DM까지 만든다 */
+  recipe: boolean;
+  dm: { title: string; ingredients: string[]; steps: string[]; tip: string } | null;
 };
 
 /** 16진 색 + 0~100 진하기 → rgba() */

@@ -112,7 +112,14 @@ const RewriteSchema = z.object({
       ),
     }),
   ),
-  caption: z.string().describe("새 캡션 전체"),
+  caption: z.string().describe("새 캡션 (recipe=true 면 본문 3문장만)"),
+  recipe: z.boolean().describe("쿠팡 파트너스로 레시피·음식을 소개하는 카드뉴스인지 (자동 DM 레시피가 필요한 게시물)"),
+  dm: z.object({
+    title: z.string().describe('recipe=true 일 때만: 이모지로 시작하는 제목. 예 "🌶️ 즉석 떡볶이 비법 양념장". 아니면 빈 문자열'),
+    ingredients: z.array(z.string()).describe('recipe=true 일 때만: 줄마다 "이모지 재료 분량", 그중 정확히 한 줄은 "✨ 비밀재료 2T". 아니면 빈 배열'),
+    steps: z.array(z.string()).describe("recipe=true 일 때만: 만드는 법 3~5단계, 번호 없이, 존댓말 ~세요. 아니면 빈 배열"),
+    tip: z.string().describe("recipe=true 일 때만: 비밀재료를 꼭 넣어야 하는 이유 한 줄. 아니면 빈 문자열"),
+  }),
 });
 
 const REWRITE = `당신은 인스타그램 카드뉴스 에디터입니다. 주제는 음식·패션·뷰티·정치·시사·경제·매거진·정보 등 무엇이든 될 수 있습니다.
@@ -134,6 +141,16 @@ const REWRITE = `당신은 인스타그램 카드뉴스 에디터입니다. 주�
 - 원본 캡션이 없으면 카드뉴스 내용을 2~4문장으로 소개하고 어울리는 해시태그 3~5개를 붙입니다.
 - 원본 캡션에 쿠팡 파트너스 같은 고지 문구가 있으면 그 문구는 빼고 씁니다(앱이 따로 붙입니다).
 
+■ 쿠팡 파트너스 레시피 게시물이면 (recipe=true)
+게시물 종류는 사용자가 고르지 않습니다. 당신이 원본을 보고 판단합니다.
+음식·레시피를 소개하며 쿠팡 파트너스·광고 표시가 있거나 "댓글 남기면 레시피 DM" 같은 유도가 있으면 recipe=true 입니다.
+- caption 은 CTA·해시태그·고지 없이 **본문 3문장만**: 존댓말 '~요'체, 문장 끝마다 서로 다른 이모지 1개.
+  문장1=어디서 먹던 음식인지+집에서도 된다는 공감, 문장2=핵심 조리 포인트, 문장3=활용도·가치. (앱이 앞뒤 CTA·고지를 붙임)
+- dm 에 레시피를 씁니다: 재료 6~9줄("이모지 재료 분량", T·t·개·약간 단위), 그중 **정확히 한 줄은 "✨ 비밀재료 2T" 처럼 '비밀재료'라는 말 그대로**
+  쓰고 그 정체는 절대 밝히지 않습니다. steps 3~5단계(존댓말 ~세요, 마지막만 "~완성!"), tip 한 줄.
+  원본에 없는 수치는 상식적인 가정식 범위로만.
+- recipe=false 면 dm 의 모든 칸을 비웁니다.
+
 ■ 출력
 - slides 는 주어진 장 수·순서 그대로, texts 는 주어진 id 를 빠짐없이 그대로 씁니다.`;
 
@@ -142,6 +159,8 @@ function mockResult(n: number): LayoutResult {
   return {
     genre: "데모",
     commerce: false,
+    recipe: false,
+    dm: null,
     caption: "[데모] 원본 캡션 형식을 따라 새로 쓴 캡션이에요 ✨\n\n#카드뉴스 #데모",
     slides: Array.from({ length: n }, (_, i) => ({
       original: "",
@@ -286,6 +305,8 @@ export async function remixLayout(req: RemixRequest): Promise<LayoutResult> {
     genre: out.genre,
     commerce: out.commerce,
     caption: out.caption.trim(),
+    recipe: out.recipe,
+    dm: out.recipe && (out.dm.title || out.dm.ingredients.length) ? out.dm : null,
     slides: blocks.map((bs, i) => ({
       original: bs.map((b) => b.original).join("\n\n"),
       ratio: ratios[i],
