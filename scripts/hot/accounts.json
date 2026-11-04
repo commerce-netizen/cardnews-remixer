@@ -1,8 +1,18 @@
 {
-  "_설명": "인기 카드뉴스 탭에서 매일 모으는 인스타 계정. 아이디만 추가/삭제하면 다음 수집부터 반영돼요. 새로 넣은 계정은 첫 수집 때 최근 게시물 100개까지 한 번에 가져와요.",
+  "_설명": "인기 카드뉴스 탭에서 매일 모으는 인스타 계정. 아이디만 추가/삭제하면 다음 수집부터 반영돼요. 카드뉴스(캐러셀) 중 영상 슬라이드가 없는 것만 모아요 — 릴스·영상·사진 1장·영상 섞인 카드뉴스는 제외.",
   "accounts": [
     "hankki_ssok",
     "gollabom",
-    "ddubimenu"
+    "ddubimenu",
+    "diva.pick",
+    "my_zipcode",
+    "susu.zib",
+    "living_pluss",
+    "temqueen0",
+    "how___pick",
+    "gomson.salim",
+    "dayzhome",
+    "roy.mom_",
+    "sundeok.food"
   ]
 }

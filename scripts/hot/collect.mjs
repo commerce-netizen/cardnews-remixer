@@ -89,6 +89,9 @@ function toPost(r) {
   if (!code || !r.user_posted || !r.date_posted) return null;
   // 카드뉴스(캐러셀)·사진만. 릴스/영상은 뺀다
   if (r.content_type && !/carousel|image|photo/i.test(r.content_type)) return null;
+  const slidesInfo = Array.isArray(r.post_content) ? r.post_content : [];
+  const isCarousel = /carousel/i.test(r.content_type || "") || r.product_type === "carousel_container";
+  const kind = isCarousel ? (slidesInfo.some((c) => /video/i.test(c.type || "")) ? "carousel-video" : "carousel") : "image";
   return {
     code,
     account: r.user_posted,
@@ -96,8 +99,9 @@ function toPost(r) {
     likes: Number(r.likes) || 0,
     comments: Number(r.num_comments) || 0,
     slides: Number(r.photos_number) || (Array.isArray(r.photos) ? r.photos.length : 1),
-    caption: String(r.description || "").replace(/\s+/g, " ").trim().slice(0, 220),
+    caption: Array.from(String(r.description || "").replace(/\s+/g, " ").trim()).slice(0, 220).join(""),
     imageUrl: r.thumbnail || r.photos?.[0] || null,
+    kind,
   };
 }
 
@@ -160,27 +164,46 @@ async function main() {
   const errors = records.filter((r) => r.error || r.error_code);
   if (errors.length) console.warn(`⚠ 오류 ${errors.length}건`, JSON.stringify(errors.slice(0, 3)).slice(0, 500));
 
-  const byCode = new Map(db.posts.map((p) => [p.code, p]));
-  let fresh = 0;
+  const posts = [];
   for (const r of records) {
     if (r.user_posted && r.followers) {
       db.accounts[r.user_posted] = { followers: r.followers, posts: r.posts_count ?? null };
     }
     const p = toPost(r);
-    if (!p) continue;
+    if (p) posts.push(p);
+  }
+  await saveHot({ out: OUT, accounts, db, fresh: posts });
+}
+
+/**
+ * 받은 게시물(fresh)을 누적 DB에 합치고 → 순위 계산 → 썸네일 → posts.json·hot.json 저장.
+ * 브라이트데이터 수집(collect.mjs)과 Aside 수집(aside-collect.mjs)이 함께 쓴다.
+ * fresh 항목: { code, account, date?, likes, comments, slides?, caption?, imageUrl? }
+ *  - date/caption/slides 가 없으면 예전에 받아 둔 값을 그대로 쓴다
+ */
+export async function saveHot({ out, accounts, db, fresh }) {
+  const OUT = out;
+  const THUMBS = path.join(OUT, "thumbs");
+  fs.mkdirSync(THUMBS, { recursive: true });
+  const byCode = new Map(db.posts.map((p) => [p.code, p]));
+  for (const p of fresh) {
     const prev = byCode.get(p.code);
+    const clean = Object.fromEntries(Object.entries(p).filter(([, v]) => v !== undefined && v !== null && v !== ""));
+    const merged = { ...prev, ...clean };
+    if (!merged.date) continue; // 올린 날짜를 모르면 순위를 못 매긴다
     const stamp = new Date().toISOString();
     // 하루에 한 번씩 수치 기록 (같은 날 여러 번 돌면 그날 기록을 덮어씀)
     const hist = (prev?.hist || []).filter(([t]) => t.slice(0, 10) !== stamp.slice(0, 10));
-    hist.push([stamp, p.likes, p.comments]);
-    byCode.set(p.code, { ...prev, ...p, hist: hist.slice(-HIST_KEEP), collectedAt: stamp });
-    fresh++;
+    hist.push([stamp, merged.likes, merged.comments]);
+    byCode.set(p.code, { ...merged, hist: hist.slice(-HIST_KEEP), collectedAt: stamp });
   }
-  console.log(`✔ 게시물 ${fresh}개 받음 → 누적 ${byCode.size}개`);
+  console.log(`✔ 게시물 ${fresh.length}개 받음 → 누적 ${byCode.size}개`);
 
   // 목록에서 빠진 계정의 게시물은 지운다
   const active = new Set(accounts);
-  const posts = [...byCode.values()].filter((p) => active.has(p.account));
+  const allPosts = [...byCode.values()].filter((p) => active.has(p.account));
+  // 보여 주는 건 '영상 없는 카드뉴스(캐러셀)'만. 나머지는 종류만 기억해 두고(다시 확인 안 하게) 목록에서 뺀다
+  const posts = allPosts.filter((p) => p.kind === "carousel");
   const now = Date.now();
   const { lists, gains } = rankLists(posts, now);
 
@@ -209,13 +232,14 @@ async function main() {
   const updatedAt = new Date(now).toISOString();
   const strip = ({ imageUrl, collectedAt, hist, ...rest }) => ({
     ...rest,
+    caption: typeof rest.caption === "string" ? rest.caption : "",
     gain: gains[rest.code],
     tracked: hist?.length ?? 0,
     thumb: fs.existsSync(path.join(THUMBS, `${rest.code}.webp`)),
   });
   fs.writeFileSync(
     path.join(OUT, "posts.json"),
-    JSON.stringify({ updatedAt, accounts: db.accounts, posts }, null, 0),
+    JSON.stringify({ updatedAt, accounts: db.accounts, posts: allPosts }, null, 0),
   );
   fs.writeFileSync(
     path.join(OUT, "hot.json"),
