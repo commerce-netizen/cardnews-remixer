@@ -261,7 +261,7 @@ function textPrompt(topic: string) {
  */
 function designPrompt() {
   return [
-    "Edit this Instagram card-news slide image. Three jobs:",
+    "Recreate this Instagram card-news slide as a NEW image. Three jobs:",
     "",
     "1) REMOVE ALL TEXT. Erase every letter, number, Korean or English character, title, caption, @handle, watermark,",
     '   page number, "[광고]" label and text-logo that is laid over the design. Fill each erased area with what is naturally',
@@ -272,15 +272,23 @@ function designPrompt() {
     "   background colors and gradients, color bands, text boxes / speech bubbles / highlight bars (leave them EMPTY),",
     "   shapes, lines, frames, borders, icons, stickers, illustrations, and where each photo sits and how it is cropped.",
     "",
-    "3) PHOTOS: inside each photo area show the same subject with a slightly different composition",
-    "   (a little different angle, crop or arrangement), keeping the same colors, lighting, white balance and mood.",
-    "   - Food: same dish, same ingredients and colors, just as appetizing.",
-    "   - Fashion / beauty / products: the exact same item — same design, color, pattern, material and printed logos.",
-    "   - Real people, news, politics, events, documents or screenshots: do NOT change the people (identity, face,",
-    "     expression, clothing, pose) or what happened. Do not add or remove people or objects. Only remove overlaid text.",
+    "3) PHOTOS — MAKE THEM NEW: every photo / illustration area must become a NEWLY CREATED image, not a copy of the original.",
+    "   Same topic, mood, color palette and lighting, but a clearly different shot: different camera angle, framing,",
+    "   subject position and arrangement, and a different background. Someone comparing the two must see a different picture.",
+    "   - Food: the same dish (same ingredients and colors, just as appetizing), shot from a different angle and arrangement.",
+    "   - Fashion / beauty / products: the same kind of item and style (same color and silhouette), newly shot —",
+    "     different pose, angle and setting. Do not copy brand logos.",
+    "   - Real people (politicians, celebrities, any identifiable person): NEVER reproduce a real person's face or likeness.",
+    "     Replace them with an anonymous, non-identifiable person (seen from behind, in silhouette, out of focus, or a",
+    "     clearly different generic face), or with a symbolic scene of the topic — e.g. a parliament building, an empty",
+    "     podium with microphones, flags, a gavel, documents, a crowd from far away, a city skyline.",
+    "   - News / events: do not fabricate a realistic depiction of a specific real event; use a symbolic, illustrative scene",
+    "     of the topic instead.",
+    "   - Documents, charts, screenshots: redraw as a clean generic graphic with no readable text.",
     "",
-    "Photorealistic and natural; it must not look AI-generated. No new text, letters or watermarks anywhere.",
-    "원본 디자인(배경·도형·띠·글상자·사진 위치)은 그대로 두고, 얹힌 글자만 전부 지워라. 사진은 같은 대상을 구도만 살짝 바꿔라.",
+    "Natural, high quality, no new text, letters, logos or watermarks anywhere.",
+    "원본 디자인(배경·도형·띠·글상자·사진 위치)은 그대로 두고 글자는 전부 지워라. 사진·그림은 같은 주제로 구도·각도·배경이 확실히 다른 새 이미지로 만들어라.",
+    "실존 인물의 얼굴·모습은 절대 재현하지 말고, 알아볼 수 없는 익명의 사람이나 주제를 상징하는 장면으로 바꿔라.",
   ].join("\n");
 }
 
@@ -335,17 +343,12 @@ export async function remakeSlideImage({ image, title = "", body = "", mode = "f
     const meta = await sharp(source.data).metadata();
     const ratio = (meta.height ?? 1350) / (meta.width ?? 1080);
     const file = await toFile(await sharp(source.data).rotate().png().toBuffer(), "slide.png", { type: "image/png" });
-    const edit = (fidelity: boolean) =>
-      client.images.edit({
-        ...common,
-        size: sizeFor(ratio) as typeof common.size,
-        image: file,
-        prompt: designPrompt(),
-        ...(fidelity ? { input_fidelity: "high" as const } : {}),
-      });
-    res = await edit(true).catch((e) => {
-      if (e instanceof OpenAI.APIError && e.status === 400 && /fidelity/i.test(e.message)) return edit(false);
-      throw e;
+    // 원본 충실도 '높음'(input_fidelity)은 원본 사진을 거의 그대로 베끼므로 일부러 켜지 않는다 (저작권 보호: 새 이미지)
+    res = await client.images.edit({
+      ...common,
+      size: sizeFor(ratio) as typeof common.size,
+      image: file,
+      prompt: designPrompt(),
     });
     const b64 = res.data?.[0]?.b64_json;
     if (!b64) throw new UserFacingError("새 사진을 만들지 못했어요. 다시 한 번 눌러 주세요.");

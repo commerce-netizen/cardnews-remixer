@@ -174,7 +174,7 @@ export default function Home() {
                   ? makeAiPhoto(img, "", "", SLIDE_W, slideHeight(ratios[i]), { mode: "design" })
                       .catch(() => {
                         failed.push(i + 1);
-                        return null; // 실패한 장은 원본 사진 위에 원래 글씨를 가리고 새 글을 얹는다
+                        return null; // 실패한 장은 원본 사진을 쓰지 않는다 (저작권) — 바탕색만 두고 다시 만들게 안내
                       })
                       .then((v) => {
                         done += 1;
@@ -202,13 +202,14 @@ export default function Home() {
           const origin = src.images[i] ?? null;
           const ai = aiImages[i] ?? null;
           return {
-            image: ai ?? origin,
+            // 원본 이미지는 저작권 때문에 결과물에 쓰지 않는다. AI 새 이미지 생성용으로만 보관
+            image: ai,
             sourceImage: origin,
             original: ls.original,
             ratio: ratios[i] ?? ls.ratio,
             bg: ls.bg,
             blocks: ls.blocks,
-            maskOriginal: !ai && !!origin,
+            maskOriginal: false,
             photoShare: ls.photoShare,
           };
         }),
@@ -221,7 +222,7 @@ export default function Home() {
       setSource(src);
       setInfo(
         failed.length
-          ? `${failed.join("·")}번 장은 새 사진을 못 만들어서 원본 사진 위에 새 글을 얹었어요. 그 장의 ✨ AI 새 사진을 다시 눌러 보세요.`
+          ? `${failed.join("·")}번 장은 AI 이미지를 못 만들어서 바탕색만 넣어 뒀어요. 그 장의 ✨ AI 새 이미지를 다시 눌러 주세요. (원본 이미지는 저작권 때문에 쓰지 않아요)`
           : null,
       );
       setStep("edit");

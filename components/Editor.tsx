@@ -257,11 +257,13 @@ export default function Editor({ mode, slides, captionBody, dmContent, commerce,
   };
 
   /** 되돌릴 사진: 직전 사진이 없으면 각색 전 원본 사진 */
-  const undoTarget = (i: number) => (i in prevImages ? prevImages[i] : (slides[i].sourceImage ?? null));
-  const canUndo = (i: number) => i in prevImages || !!(slides[i].sourceImage && slides[i].sourceImage !== slides[i].image);
+  // 원본 디자인 모드는 원본 이미지로 되돌리지 않는다 (저작권 — 결과물엔 AI 이미지나 내가 올린 사진만)
+  const undoTarget = (i: number) => (i in prevImages ? prevImages[i] : design ? null : (slides[i].sourceImage ?? null));
+  const canUndo = (i: number) =>
+    i in prevImages || (!design && !!(slides[i].sourceImage && slides[i].sourceImage !== slides[i].image));
   const undoImage = (i: number) => {
     const image = undoTarget(i);
-    updateSlide(i, { image, maskOriginal: design && !!image && image === slides[i].sourceImage });
+    updateSlide(i, { image, maskOriginal: false });
     forgetPrev(i);
   };
 
@@ -452,16 +454,16 @@ export default function Editor({ mode, slides, captionBody, dmContent, commerce,
                 )}
                 {IMAGE_GEN_ENABLED && (s.image || s.sourceImage) && (
                   <button className="btn btn-secondary" onClick={() => generateImage(i)} disabled={genIndex !== null || !!busy}>
-                    {genIndex === i ? "새 사진 만드는 중…" : "✨ AI 새 사진"}
+                    {genIndex === i ? "새 이미지 만드는 중…" : s.image ? "✨ AI 새 이미지 다시 만들기" : "✨ AI 새 이미지 만들기"}
                   </button>
                 )}
                 {canUndo(i) && genIndex !== i && (
                   <button className="btn btn-secondary" onClick={() => undoImage(i)} disabled={!!busy}>↩ 이전 사진으로</button>
                 )}
               </div>
-              {s.maskOriginal && (
+              {design && !s.image && s.sourceImage && genIndex !== i && (
                 <p className="muted small" style={{ margin: 0 }}>
-                  지금은 <b>원본 사진</b> 위에 새 글을 덮어 쓴 상태예요. ✨ AI 새 사진을 누르면 원래 글씨가 지워진 사진으로 바뀌어요.
+                  이 장은 아직 AI 이미지가 없어요. <b>✨ AI 새 이미지 만들기</b>를 눌러 주세요. 원본 이미지는 저작권 때문에 그대로 쓰지 않아요.
                 </p>
               )}
               {s.original && (
