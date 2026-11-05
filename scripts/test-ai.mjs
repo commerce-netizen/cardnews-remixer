@@ -10,6 +10,8 @@ const FAKE_PORT = 4010;
 const APP_PORT = 3124;
 
 const good = {
+  recipe: true,
+  commerce: true,
   slides: [
     { original: "여름 필수템 BEST 3", title: "올여름, 이거 없으면\n후회해요", body: "써 본 사람만 아는 찐템 세 가지." },
     { original: "1. 휴대용 선풍기", title: "손바닥만 한 바람 공장", body: "가방에 쏙, 하루 종일 시원해요." },

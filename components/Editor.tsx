@@ -9,7 +9,7 @@ import FontPicker from "./FontPicker";
 import { resizeImage } from "@/lib/client-images";
 import { IMAGE_GEN_ENABLED, makeAiPhoto } from "@/lib/slide-image";
 import { downloadZip, renderSlides, triggerDownload } from "@/lib/export";
-import { buildCaption } from "@/lib/caption";
+import { DISCLOSURE, buildCaption } from "@/lib/caption";
 import { buildDm, type DmContent } from "@/lib/dm";
 import { loadFonts } from "@/lib/webfonts";
 import {
@@ -42,6 +42,10 @@ import {
 import type { Slide } from "@/lib/types";
 
 type Props = {
+  /** 음식·레시피 카드뉴스인지 (false = 정치·시사·패션 등 일반 → 캡션 CTA·고정 댓글·자동 DM 없음) */
+  recipe: boolean;
+  /** 쿠팡 파트너스·광고 게시물인지 ([광고] 표시·고지 기본값) */
+  commerce: boolean;
   slides: Slide[];
   /** AI가 각색한 캡션 본문 (CTA·고지 없이) */
   captionBody: string;
@@ -54,7 +58,7 @@ type Props = {
 
 type Sel = { slide: number; id: string } | null;
 
-export default function Editor({ slides, captionBody, dmContent, onChangeSlides, onRemixAgain, onRestart }: Props) {
+export default function Editor({ recipe, commerce, slides, captionBody, dmContent, onChangeSlides, onRemixAgain, onRestart }: Props) {
   const [caption, setCaption] = useState("");
   const [dm, setDm] = useState("");
   const [dmCopied, setDmCopied] = useState(false);
@@ -63,7 +67,9 @@ export default function Editor({ slides, captionBody, dmContent, onChangeSlides,
   const [templates, setTemplates] = useState<Template[]>(BUILTIN_TEMPLATES);
   const [templateId, setTemplateId] = useState(DEFAULT_TEMPLATE.id);
   const [watermark, setWatermark] = useState<WatermarkStyle>(DEFAULT_TEMPLATE.watermark);
-  const [adLabel, setAdLabel] = useState(true);
+  const [adLabel, setAdLabel] = useState(commerce);
+  // 일반 카드뉴스: 쿠팡 파트너스 고지를 캡션에 붙일지 (레시피는 항상 붙음)
+  const [disclose, setDisclose] = useState(commerce);
   const [showTemplates, setShowTemplates] = useState(false);
   const [askRestart, setAskRestart] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
@@ -105,16 +111,18 @@ export default function Editor({ slides, captionBody, dmContent, onChangeSlides,
     loadFonts(JSON.parse(fontKey));
   }, [fontKey]);
 
-  // 캡션 = 템플릿 CTA + AI 본문 + 쿠팡 고지
+  // 캡션: 레시피 = 템플릿 CTA + AI 본문 + 쿠팡 고지 / 일반 = AI 캡션 (+ 고지)
   useEffect(() => {
-    setCaption(buildCaption(captionBody, template));
+    setCaption(
+      recipe ? buildCaption(captionBody, template) : [captionBody.trim(), disclose ? DISCLOSURE : ""].filter(Boolean).join("\n\n"),
+    );
     setResults(null);
-  }, [captionBody, template]);
+  }, [captionBody, template, recipe, disclose]);
 
   useEffect(() => {
-    setDm(buildDm(dmContent, template));
-    setPinned(template.pinnedComment);
-  }, [dmContent, template]);
+    setDm(recipe ? buildDm(dmContent, template) : "");
+    setPinned(recipe ? template.pinnedComment : "");
+  }, [dmContent, template, recipe]);
 
   const setSlides = (fn: (prev: Slide[]) => Slide[]) => {
     onChangeSlides(fn);
@@ -128,7 +136,7 @@ export default function Editor({ slides, captionBody, dmContent, onChangeSlides,
     setResults(null);
     saveActiveId(t.id);
     setWatermark({ ...t.watermark });
-    setAdLabel(t.adLabel);
+    setAdLabel(t.adLabel && commerce);
     setSlides((prev) => prev.map((s) => ({ ...s, blocks: applyTemplateToBlocks(s.blocks, t, true) })));
   }
 
@@ -333,6 +341,9 @@ export default function Editor({ slides, captionBody, dmContent, onChangeSlides,
           </div>
           <Range label="워터마크 크기" value={watermark.size} min={14} max={80} unit="px" onChange={(size) => setWatermark({ ...watermark, size })} />
           <Toggle label="[광고] 표시" hint="쿠팡 파트너스·협찬 게시물이면 꼭 켜 두세요" checked={adLabel} onChange={(v) => { setAdLabel(v); setResults(null); }} />
+          {!recipe && (
+            <Toggle label="캡션에 쿠팡 파트너스 고지 붙이기" checked={disclose} onChange={setDisclose} />
+          )}
         </section>
       </div>
 
@@ -481,24 +492,28 @@ export default function Editor({ slides, captionBody, dmContent, onChangeSlides,
         <section className="card">
           <h2>캡션 (본문 글)</h2>
           <textarea rows={12} value={caption} onChange={(e) => { setCaption(e.target.value); setResults(null); }} aria-label="캡션" />
-          <p className="muted small" style={{ margin: "12px 0 0" }}>
-            맨 윗줄·맨 아랫줄 문구는 <b>템플릿</b>에서 바꿀 수 있어요. 여기서 고친 건 이번 한 번만 적용돼요.
-          </p>
+          {recipe && (
+            <p className="muted small" style={{ margin: "12px 0 0" }}>
+              맨 윗줄·맨 아랫줄 문구는 <b>템플릿</b>에서 바꿀 수 있어요. 여기서 고친 건 이번 한 번만 적용돼요.
+            </p>
+          )}
           <button className="btn btn-secondary btn-block" style={{ marginTop: 16 }} onClick={() => copyText(caption, setCopied, "캡션")}>
             {copied ? "✓ 복사됐어요" : "📋 캡션 복사하기"}
           </button>
         </section>
 
-        <section className="card">
-          <h2>고정 댓글</h2>
-          <p className="muted small" style={{ margin: "0 0 14px" }}>
-            게시물 올린 뒤 <b>맨 위에 고정</b>해 둘 댓글이에요. 문구는 <b>템플릿</b>에서 바꿀 수 있어요.
-          </p>
-          <textarea rows={5} value={pinned} onChange={(e) => { setPinned(e.target.value); setResults(null); }} aria-label="고정 댓글" />
-          <button className="btn btn-secondary btn-block" style={{ marginTop: 16 }} onClick={() => copyText(pinned, setPinnedCopied, "고정 댓글")}>
-            {pinnedCopied ? "✓ 복사됐어요" : "📋 고정 댓글 복사하기"}
-          </button>
-        </section>
+        {recipe && (
+          <section className="card">
+            <h2>고정 댓글</h2>
+            <p className="muted small" style={{ margin: "0 0 14px" }}>
+              게시물 올린 뒤 <b>맨 위에 고정</b>해 둘 댓글이에요. 문구는 <b>템플릿</b>에서 바꿀 수 있어요.
+            </p>
+            <textarea rows={5} value={pinned} onChange={(e) => { setPinned(e.target.value); setResults(null); }} aria-label="고정 댓글" />
+            <button className="btn btn-secondary btn-block" style={{ marginTop: 16 }} onClick={() => copyText(pinned, setPinnedCopied, "고정 댓글")}>
+              {pinnedCopied ? "✓ 복사됐어요" : "📋 고정 댓글 복사하기"}
+            </button>
+          </section>
+        )}
 
         {dm && (
           <section className="card">
@@ -519,7 +534,7 @@ export default function Editor({ slides, captionBody, dmContent, onChangeSlides,
         <section className="card" style={{ borderColor: "var(--ok)" }}>
           <h2>완성! 🎉</h2>
           <p>
-            컴퓨터에는 <b>압축 파일(zip)</b>로 저장됐어요. 사진과 함께 <b>캡션·고정 댓글·자동 DM 글</b>도 들어 있어요. 휴대폰에서는 아래 사진을 <b>길게 눌러 저장</b>하거나 저장 버튼을 누르세요.
+            컴퓨터에는 <b>압축 파일(zip)</b>로 저장됐어요. 사진과 함께 <b>캡션{recipe ? "·고정 댓글·자동 DM" : ""} 글</b>도 들어 있어요. 휴대폰에서는 아래 사진을 <b>길게 눌러 저장</b>하거나 저장 버튼을 누르세요.
           </p>
           <div className="thumbs">
             {results.map((u, i) => (

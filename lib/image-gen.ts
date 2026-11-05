@@ -255,10 +255,82 @@ function textPrompt(topic: string) {
   ].join("\n");
 }
 
+/**
+ * 음식 사진인지 먼저 가린다 — 음식은 '원본 음식·색감 그대로, 구도만' (input_fidelity high),
+ * 그 외(정치·시사·패션·뷰티·매거진·정보…)는 '같은 주제의 새 사진' (원본을 베끼지 않게 fidelity 끔, 실존 인물 얼굴 재현 금지).
+ */
+const KindSchema = z.object({
+  food: z.boolean().describe("사진의 주인공이 음식·요리·식재료인지"),
+});
+
+async function isFoodPhoto(client: OpenAI, image: string): Promise<boolean> {
+  const res = await client.responses
+    .parse({
+      model: TEXT_MODEL,
+      instructions: "Look at this Instagram card-news slide. Ignore overlaid text. Is the main subject of the photo food, a dish, or cooking ingredients?",
+      input: [{ role: "user", content: [{ type: "input_image", image_url: image, detail: "low" }] }],
+      text: { format: zodTextFormat(KindSchema, "photo_kind") },
+      reasoning: { effort: "low" },
+      max_output_tokens: 1000,
+      store: false,
+    })
+    .catch((e) => {
+      if (e instanceof OpenAI.APIError) throw e;
+      console.error("[image-gen] 종류 판별 실패", e);
+      return null;
+    });
+  // 판별 실패 시 '일반'으로 — 원본을 덜 베끼는 쪽이 안전하다
+  return !!res?.output_parsed?.food;
+}
+
+/** 음식이 아닌 카드뉴스 사진: 같은 주제·분위기의 새 사진 (글자 제거, 실존 인물·로고 재현 금지) */
+function generalPrompt() {
+  return [
+    "Create a NEW photo based on this Instagram card-news slide. It must not be a copy of the input.",
+    "",
+    "KEEP: the same topic and subject matter, the same mood, color palette, lighting style and overall look,",
+    "so it fits the same card-news post.",
+    "",
+    "CHANGE CLEARLY: a different camera angle, framing, subject position and arrangement, and a different background.",
+    "Someone comparing the two must see a different picture of the same topic.",
+    "- Fashion / beauty / products: the same kind of item and style (same color and silhouette), newly shot —",
+    "  different pose, angle and setting. Do not copy brand logos or brand names.",
+    "- Real people (politicians, celebrities, any identifiable person): NEVER reproduce a real person's face or likeness.",
+    "  Replace them with an anonymous, non-identifiable person (seen from behind, in silhouette, out of focus, or a",
+    "  clearly different generic face), or with a symbolic scene of the topic — e.g. a parliament building, an empty",
+    "  podium with microphones, flags, a gavel, documents, a crowd from far away, a city skyline.",
+    "- News / events: do not fabricate a realistic depiction of a specific real event; use a symbolic scene of the topic.",
+    "- Documents, charts, screenshots, illustrations: redraw as a clean generic image with no readable text.",
+    "- If the slide is mostly a plain graphic background (solid color, gradient, pattern) with text on it,",
+    "  return just that clean background with no text.",
+    "",
+    "PHOTOREALISM: it should look like an ordinary real photo, not AI-generated — natural textures and lighting,",
+    "no plastic or over-smooth surfaces, no exaggerated colors.",
+    "",
+    "REMOVE ALL TEXT AND OVERLAYS: titles, captions, subtitles, text boxes, gradient bands, watermarks, @handles,",
+    'the "[광고]" label, page numbers, logos, stickers, frames and borders. Fill those areas naturally.',
+    "The output is one clean full-bleed photo with no letters, numbers, Korean or English characters anywhere. Do not add any new text.",
+    "같은 주제·분위기·색감의 새 사진으로 만들되 구도·각도·배경은 확실히 다르게. 글자는 전부 지워라.",
+    "실존 인물의 얼굴·모습은 절대 재현하지 말고, 알아볼 수 없는 익명의 사람이나 주제를 상징하는 장면으로 바꿔라.",
+  ].join("\n");
+}
+
+/** 원본 사진 없이 글만 있는 장(음식 아님): 글 주제로 새 사진 */
+function generalTextPrompt(topic: string) {
+  return [
+    "A realistic, natural-looking photo for an Instagram card-news slide about the topic below, vertical 4:5.",
+    `Topic (Korean, do NOT write it in the image): ${topic.slice(0, 300)}`,
+    "Never depict a real, identifiable person's face; use anonymous people or a symbolic scene instead.",
+    "No text, letters, numbers, logos or watermarks anywhere.",
+  ].join("\n");
+}
+
 export type ImageGenRequest = {
   image?: string | null;
   title?: string;
   body?: string;
+  /** 글만 있는 장에서 쓸 사진 종류 (사진이 있으면 서버가 직접 판별) */
+  recipe?: boolean;
 };
 
 function parseDataUrl(d: string): { type: string; data: Buffer } {
@@ -271,7 +343,7 @@ function parseDataUrl(d: string): { type: string; data: Buffer } {
  * 슬라이드 사진을 '원본처럼 사실적이지만 구도·배경·배치만 바뀐, 글자 없는' 새 사진으로 바꾼다.
  * 원본 사진이 없으면 슬라이드 글로 만든다. 결과는 JPEG data URL.
  */
-export async function remakeSlideImage({ image, title = "", body = "" }: ImageGenRequest): Promise<string> {
+export async function remakeSlideImage({ image, title = "", body = "", recipe = true }: ImageGenRequest): Promise<string> {
   const topic = `${title}\n${body}`.trim();
   if (!image && !topic) throw new UserFacingError("먼저 사진을 넣거나 글을 적어 주세요.");
   const source = image ? parseDataUrl(image) : null;
@@ -290,7 +362,11 @@ export async function remakeSlideImage({ image, title = "", body = "" }: ImageGe
 
   let res;
   if (!source) {
-    res = await client.images.generate({ ...common, prompt: textPrompt(topic) });
+    res = await client.images.generate({ ...common, prompt: recipe ? textPrompt(topic) : generalTextPrompt(topic) });
+  } else if (!(await isFoodPhoto(client, image!))) {
+    // 음식 아님: 구도를 미리 바꾸고, 원본 충실도는 끈 채 같은 주제의 새 사진으로
+    const file = await toFile(await reframe(source.data), "slide.png", { type: "image/png" });
+    res = await client.images.edit({ ...common, image: file, prompt: generalPrompt() });
   } else {
     const analysis = MODE === "describe" ? await analyze(client, image!) : null;
     if (analysis) {

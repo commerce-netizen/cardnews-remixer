@@ -55,6 +55,9 @@ export default function Home() {
   // AI가 각색한 캡션 본문 (CTA·고지 문구는 Editor가 템플릿대로 붙인다)
   const [caption, setCaption] = useState("");
   const [dmContent, setDmContent] = useState<DmContent | null>(null);
+  // AI가 원본을 보고 판단: 레시피 카드뉴스인지(→ CTA·고정 댓글·DM), 광고 게시물인지
+  const [recipe, setRecipe] = useState(true);
+  const [commerce, setCommerce] = useState(true);
 
   /**
    * 글 각색과 AI 새 사진을 **동시에** 돌린다.
@@ -117,6 +120,8 @@ export default function Home() {
       );
       setCaption(r.caption);
       setDmContent(r.dm ?? null);
+      setRecipe(r.recipe !== false);
+      setCommerce(r.commerce !== false);
       setSource(src);
       setInfo(
         failed.length
@@ -325,6 +330,9 @@ export default function Home() {
       {step === "edit" && info && <div className="notice notice-info">{info}</div>}
       {step === "edit" && source && (
         <Editor
+          key={`${recipe}-${commerce}`}
+          recipe={recipe}
+          commerce={commerce}
           slides={slides}
           captionBody={caption}
           dmContent={dmContent}

@@ -12,14 +12,16 @@ const MAX_IMAGES = 10;
 class RemixError extends UserFacingError {}
 
 const ResultSchema = z.object({
+  recipe: z.boolean().describe("음식·레시피 카드뉴스인지 (아니면 정치·시사·패션·뷰티·매거진·정보 등 일반 카드뉴스)"),
+  commerce: z.boolean().describe("쿠팡 파트너스·광고·협찬·제휴 판매 게시물인지"),
   slides: z.array(
     z.object({
       original: z.string().describe("원본 슬라이드에서 읽은 글 그대로"),
-      title: z.string().describe("1번 장(표지)만: 정확히 3줄, 줄마다 \\n. 2번 장부터는 빈 문자열"),
-      body: z.string().describe("2번 장부터: 정확히 3줄, 줄마다 \\n. 1번 장은 빈 문자열"),
+      title: z.string().describe("1번 장(표지)만, 줄마다 \\n. 2번 장부터는 빈 문자열"),
+      body: z.string().describe("2번 장부터, 줄마다 \\n. 1번 장은 빈 문자열"),
     }),
   ),
-  caption: z.string().describe("캡션 본문만. 존댓말 3문장, 문장마다 끝에 이모지 1개. CTA·해시태그·고지 문구 없이"),
+  caption: z.string().describe("recipe=true: 본문 3문장만(CTA·해시태그·고지 없이) / recipe=false: 원본 형식을 따른 새 캡션(고지 문구 없이)"),
   dm: z.object({
     title: z.string().describe('이모지로 시작하는 제목. 예 "🌶️ 즉석 떡볶이 비법 양념장"'),
     ingredients: z
@@ -35,8 +37,16 @@ const ResultSchema = z.object({
  * 핵심: ①슬라이드는 표지·내지 모두 정확히 3줄 ②슬라이드엔 이모지가 하나도 없고 캡션에만 쓴다
  *      ③슬라이드는 반말 구어체, 캡션 본문은 존댓말 '~요'체 ④표지는 [권위]/[메뉴]/[공개 선언] 3단 구조
  */
-const SYSTEM = `당신은 레시피 카드뉴스 전문 인스타그램 에디터입니다. (쿠팡 파트너스 제휴)
-참고용 원본 카드뉴스를 보고, 같은 정보를 전하되 원본과 확실히 다르게 들리도록 아래 형식에 딱 맞춰 새로 씁니다.
+const SYSTEM = `당신은 인스타그램 카드뉴스 에디터입니다.
+참고용 원본 카드뉴스를 보고, 같은 정보를 전하되 원본과 확실히 다르게 들리도록 새로 씁니다.
+
+■ 먼저 종류를 판단합니다 (사용자가 고르지 않음)
+- recipe=true: 음식·요리·레시피를 소개하는 카드뉴스. → 아래 「레시피 카드뉴스」 규칙을 그대로 따릅니다.
+- recipe=false: 그 밖의 모든 카드뉴스 (정치·시사·경제·패션·뷰티·매거진·생활정보·상품 소개 등).
+  → 맨 아래 「일반 카드뉴스」 규칙을 따르고, 레시피 규칙(반말·3줄 고정·DM)은 쓰지 않습니다.
+- commerce: 쿠팡 파트너스·광고·협찬 표시나 상품 판매 유도가 있으면 true.
+
+=================== 레시피 카드뉴스 (recipe=true) ===================
 
 ■ 목소리 (가장 중요)
 - 슬라이드 글 = 반말 구어체. 친구한테 맛집 자랑하듯, 내가 직접 먹어본 1인칭 체험담.
@@ -111,6 +121,20 @@ const SYSTEM = `당신은 레시피 카드뉴스 전문 인스타그램 에디�
   (나쁜 예: 원본에 없는데 "고춧가루·간장·올리고당 비율을 맞춰" 라고 지어내기)
 - 없는 효능·후기·가게 정보도 지어내지 않습니다.
 
+=================== 일반 카드뉴스 (recipe=false) ===================
+■ 슬라이드 글 (앱이 1번 장엔 title, 2번 장부터는 body 를 사진 위 글 상자 하나에 얹습니다)
+- 1번 장 title: 표지 제목. 2~3줄, 한 줄 6~16자. 짧고 강하게, 원본 표지의 핵심을 다른 말로.
+- 2번 장부터 body: 그 장의 핵심 내용을 2~4줄, 한 줄 10~20자. 원본 장의 정보를 빠짐없이 압축합니다.
+- 말투(반말·존댓말·뉴스체·매거진체)와 분위기는 원본과 같게 맞춥니다. 슬라이드 글에는 이모지를 쓰지 않습니다.
+- 이름·숫자·날짜·장소·인용문·사건 같은 **사실은 원본 그대로**. 원본에 없는 사실·수치·후기를 지어내지 않습니다.
+- 정치·시사·경제 글은 원본의 사실관계와 논조를 바꾸거나 과장하지 않습니다. 인용문은 따옴표 안 글자를 바꾸지 않습니다.
+■ caption
+- 원본 캡션의 형식(길이·줄바꿈·이모지·해시태그 개수·질문/CTA 유무)을 따라 새로 씁니다. 사실은 원본 그대로.
+- 원본 캡션이 없으면 카드뉴스 내용을 2~4문장으로 소개하고 어울리는 해시태그 3~5개를 붙입니다.
+- 쿠팡 파트너스 같은 고지 문구는 빼고 씁니다(앱이 따로 붙입니다).
+■ dm: 모든 칸을 비웁니다 (title "", ingredients [], steps [], tip "").
+
+=================== 공통 ===================
 ■ 출력
 - 슬라이드 이미지가 주어지면 이미지 수와 같은 개수, 같은 순서로 slides를 만듭니다. 각 이미지 속 글자를 읽어 original에 적습니다. 글자가 없는 사진이면 original은 빈 문자열로 두고 앞뒤 흐름에 맞는 글을 씁니다.
 - 이미지 없이 글만 주어지면 빈 줄이나 "---"로 나뉜 덩어리를 슬라이드 하나로 봅니다. 구분이 없으면 흐름에 맞게 4~6장으로 나눕니다.`;
@@ -144,7 +168,23 @@ export async function toDataUrls(req: RemixRequest): Promise<string[]> {
 function mockRemix(req: RemixRequest): RemixResult {
   const textBlocks = (req.slideText ?? "").split(/\n\s*\n|^---$/m).map((t) => t.trim()).filter(Boolean);
   const n = Math.min(MAX_IMAGES, Math.max(req.imageDataUrls?.length ?? 0, req.imageUrls?.length ?? 0, textBlocks.length, 1));
+  // 데모: 글에 '패션'·'정치'·'뉴스'가 있으면 일반 카드뉴스로 흉내 (화면 확인용)
+  if (/패션|정치|뉴스/.test(req.slideText ?? "")) {
+    return {
+      recipe: false,
+      commerce: false,
+      slides: Array.from({ length: n }, (_, i) => ({
+        original: textBlocks[i] ?? "",
+        title: i === 0 ? "[데모] 올가을 꼭 사야 할\n트렌치코트 3가지" : "",
+        body: i === 0 ? "" : `[데모] ${i + 1}번 장 일반 카드뉴스\n예시 문장이에요`,
+      })),
+      caption: "[데모] 올가을 트렌치코트 고르는 법을 정리했어요.\n\n#가을코디 #트렌치코트",
+      dm: null,
+    };
+  }
   return {
+    recipe: true,
+    commerce: true,
     slides: Array.from({ length: n }, (_, i) => ({
       original: textBlocks[i] ?? "",
       title: i === 0 ? "[데모] 신당동 즉석 떡볶이\n비밀 레시피 유출?\n맛의 비결은 이거 하나!" : "",
@@ -227,5 +267,11 @@ export async function remix(req: RemixRequest): Promise<RemixResult> {
     throw new RemixError("각색 결과를 만들지 못했어요. 다시 한 번 눌러 주세요.");
   }
   // CTA·고지·DM 인트로는 화면에서 템플릿 설정대로 붙인다 (lib/caption.ts, lib/dm.ts)
-  return { slides: out.slides, caption: out.caption.trim(), dm: out.dm };
+  return {
+    slides: out.slides,
+    caption: out.caption.trim(),
+    recipe: out.recipe,
+    commerce: out.commerce || out.recipe,
+    dm: out.recipe ? out.dm : null,
+  };
 }

@@ -35,6 +35,10 @@ export type RemixRequest = {
 export type RemixResult = {
   slides: { original: string; title: string; body: string }[];
   caption: string;
-  /** 자동 DM용 레시피 (인트로·CTA·고지는 화면에서 템플릿대로 붙인다) */
-  dm: DmContent;
+  /** 음식·레시피 카드뉴스인지 (false = 정치·시사·패션 등 일반 카드뉴스 → CTA·고정 댓글·DM 없음) */
+  recipe: boolean;
+  /** 쿠팡 파트너스·광고 게시물인지 ([광고] 표시·고지 기본값) */
+  commerce: boolean;
+  /** 자동 DM용 레시피 (레시피일 때만. 인트로·CTA·고지는 화면에서 템플릿대로 붙인다) */
+  dm: DmContent | null;
 };
