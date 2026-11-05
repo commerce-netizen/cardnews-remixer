@@ -4,8 +4,7 @@
  * 글 상자 하나하나가 글꼴·굵기·크기·색·위치(끌어서 이동)·정렬·자간·행간·글상자·테두리·그림자·강조색을
  * 따로 가진다. 템플릿은 이 스타일을 '역할'(제목·본문·부제목…)별로 저장해 두고 한 번에 입힌다.
  *
- * - 레시피 모드: 1번 장에 제목 상자 1개, 2번 장부터 본문 상자 1개 (템플릿 스타일로 시작)
- * - 원본 디자인 모드: AI가 원본 슬라이드에서 글 상자들을 찾아 위치·모양을 잡아 준다 (출발점일 뿐, 전부 고칠 수 있음)
+ * 1번 장에 제목 상자 1개, 2번 장부터 본문 상자 1개로 시작하고, 고른 템플릿 모양(위치 포함)을 입힌다.
  */
 
 export type TextRole = "title" | "subtitle" | "body" | "label" | "number" | "source" | "handle" | "other";
@@ -197,18 +196,6 @@ export const blockId = () => `b${Date.now().toString(36)}${(seq++).toString(36)}
 export function newBlock(role: TextRole, text: string, style: Partial<BlockStyle> = {}): TextBlock {
   return { ...defaultStyleFor(role), ...style, id: blockId(), role, original: "", text, accent: "" };
 }
-
-/** /api/layout 결과 */
-export type LayoutResult = {
-  genre: string;
-  slides: { original: string; ratio: number; bg: string; photoShare: number; blocks: TextBlock[] }[];
-  caption: string;
-  /** 쿠팡 파트너스·광고 게시물로 보이는지 */
-  commerce: boolean;
-  /** 쿠팡 파트너스 레시피 게시물로 판단됨 → 캡션 CTA·고정 댓글·자동 DM까지 만든다 */
-  recipe: boolean;
-  dm: { title: string; ingredients: string[]; steps: string[]; tip: string } | null;
-};
 
 /** 16진 색 + 0~100 진하기 → rgba() */
 export function rgba(hex: string, opacity: number): string {

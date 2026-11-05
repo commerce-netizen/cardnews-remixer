@@ -235,7 +235,7 @@ export function blockFontNeeds(blocks: TextBlock[]): FontNeed[] {
 
 /**
  * 템플릿 모양을 글 상자들에 입힌다. 템플릿에 그 역할 모양이 없으면 그대로 둔다.
- * withPosition=false 면 위치·크기는 원래 자리 그대로 두고 모양만 바꾼다(원본 디자인 모드).
+ * withPosition=false 면 위치·크기는 그대로 두고 모양만 바꾼다.
  */
 export function applyTemplateToBlocks(blocks: TextBlock[], t: Template, withPosition: boolean): TextBlock[] {
   return blocks.map((b) => {

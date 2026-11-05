@@ -14,16 +14,7 @@ export type Slide = {
   bg: string;
   /** 사진 위에 얹는 글 상자들 */
   blocks: TextBlock[];
-  /**
-   * 원본 디자인 모드에서 image가 아직 '글자가 박힌 원본'이면 true —
-   * 새 글 뒤에 원래 글씨를 가리는 바탕을 깐다. AI가 글자를 지운 사진이나 직접 올린 사진이면 false.
-   */
-  maskOriginal?: boolean;
-  /** 원본 디자인 모드: 사진이 차지하는 비율 (AI 새 사진 색감 맞추기용) */
-  photoShare?: number;
 };
-
-export type Mode = "design" | "recipe";
 
 export type ExtractResult = {
   imageUrls: string[];

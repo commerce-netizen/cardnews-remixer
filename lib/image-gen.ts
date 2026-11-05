@@ -255,60 +255,10 @@ function textPrompt(topic: string) {
   ].join("\n");
 }
 
-/**
- * '원본 디자인 그대로' 모드: 슬라이드 전체에서 글자만 지우고 디자인(도형·띠·글상자·사진 배치)은 그대로,
- * 사진 부분만 구도를 살짝 바꾼다. 음식·패션·정치·시사·매거진 등 어떤 주제든 같은 프롬프트.
- */
-function designPrompt() {
-  return [
-    "Recreate this Instagram card-news slide as a NEW image. Three jobs:",
-    "",
-    "1) REMOVE ALL TEXT. Erase every letter, number, Korean or English character, title, caption, @handle, watermark,",
-    '   page number, "[광고]" label and text-logo that is laid over the design. Fill each erased area with what is naturally',
-    "   behind it — continue the background color, gradient, pattern, texture or photo seamlessly. Do not add any new text.",
-    "   (Text that physically belongs to an object in a photo — a product package, a sign — may stay.)",
-    "",
-    "2) KEEP THE DESIGN EXACTLY. Every non-text design element stays in the same place, size and color:",
-    "   background colors and gradients, color bands, text boxes / speech bubbles / highlight bars (leave them EMPTY),",
-    "   shapes, lines, frames, borders, icons, stickers, illustrations, and where each photo sits and how it is cropped.",
-    "",
-    "3) PHOTOS — MAKE THEM NEW: every photo / illustration area must become a NEWLY CREATED image, not a copy of the original.",
-    "   Same topic, mood, color palette and lighting, but a clearly different shot: different camera angle, framing,",
-    "   subject position and arrangement, and a different background. Someone comparing the two must see a different picture.",
-    "   - Food: the same dish (same ingredients and colors, just as appetizing), shot from a different angle and arrangement.",
-    "   - Fashion / beauty / products: the same kind of item and style (same color and silhouette), newly shot —",
-    "     different pose, angle and setting. Do not copy brand logos.",
-    "   - Real people (politicians, celebrities, any identifiable person): NEVER reproduce a real person's face or likeness.",
-    "     Replace them with an anonymous, non-identifiable person (seen from behind, in silhouette, out of focus, or a",
-    "     clearly different generic face), or with a symbolic scene of the topic — e.g. a parliament building, an empty",
-    "     podium with microphones, flags, a gavel, documents, a crowd from far away, a city skyline.",
-    "   - News / events: do not fabricate a realistic depiction of a specific real event; use a symbolic, illustrative scene",
-    "     of the topic instead.",
-    "   - Documents, charts, screenshots: redraw as a clean generic graphic with no readable text.",
-    "",
-    "Natural, high quality, no new text, letters, logos or watermarks anywhere.",
-    "원본 디자인(배경·도형·띠·글상자·사진 위치)은 그대로 두고 글자는 전부 지워라. 사진·그림은 같은 주제로 구도·각도·배경이 확실히 다른 새 이미지로 만들어라.",
-    "실존 인물의 얼굴·모습은 절대 재현하지 말고, 알아볼 수 없는 익명의 사람이나 주제를 상징하는 장면으로 바꿔라.",
-  ].join("\n");
-}
-
-/** gpt-image-2.5 는 임의 크기(16의 배수)를 받으므로 원본 비율 그대로, 그 외는 가까운 표준 크기 */
-function sizeFor(ratio: number): string {
-  if (/^gpt-image-2\.5/.test(IMAGE_MODEL)) {
-    const w = 1088;
-    return `${w}x${Math.round((w * ratio) / 16) * 16}`;
-  }
-  return ratio > 1.15 ? "1024x1536" : ratio < 0.85 ? "1536x1024" : "1024x1024";
-}
-
 export type ImageGenRequest = {
   image?: string | null;
   title?: string;
   body?: string;
-  /** food: 레시피 사진(기본) / design: 원본 디자인 그대로 글자만 지운 슬라이드 */
-  mode?: "food" | "design";
-  /** design 모드: 슬라이드에서 사진이 차지하는 비율 0~100 (색감 맞추기 여부) */
-  photoShare?: number;
 };
 
 function parseDataUrl(d: string): { type: string; data: Buffer } {
@@ -321,7 +271,7 @@ function parseDataUrl(d: string): { type: string; data: Buffer } {
  * 슬라이드 사진을 '원본처럼 사실적이지만 구도·배경·배치만 바뀐, 글자 없는' 새 사진으로 바꾼다.
  * 원본 사진이 없으면 슬라이드 글로 만든다. 결과는 JPEG data URL.
  */
-export async function remakeSlideImage({ image, title = "", body = "", mode = "food", photoShare = 100 }: ImageGenRequest): Promise<string> {
+export async function remakeSlideImage({ image, title = "", body = "" }: ImageGenRequest): Promise<string> {
   const topic = `${title}\n${body}`.trim();
   if (!image && !topic) throw new UserFacingError("먼저 사진을 넣거나 글을 적어 주세요.");
   const source = image ? parseDataUrl(image) : null;
@@ -339,24 +289,6 @@ export async function remakeSlideImage({ image, title = "", body = "", mode = "f
   const client = openai({ maxRetries: 0, timeout: 150_000 });
 
   let res;
-  if (mode === "design" && source) {
-    const meta = await sharp(source.data).metadata();
-    const ratio = (meta.height ?? 1350) / (meta.width ?? 1080);
-    const file = await toFile(await sharp(source.data).rotate().png().toBuffer(), "slide.png", { type: "image/png" });
-    // 원본 충실도 '높음'(input_fidelity)은 원본 사진을 거의 그대로 베끼므로 일부러 켜지 않는다 (저작권 보호: 새 이미지)
-    res = await client.images.edit({
-      ...common,
-      size: sizeFor(ratio) as typeof common.size,
-      image: file,
-      prompt: designPrompt(),
-    });
-    const b64 = res.data?.[0]?.b64_json;
-    if (!b64) throw new UserFacingError("새 사진을 만들지 못했어요. 다시 한 번 눌러 주세요.");
-    const raw = Buffer.from(b64, "base64");
-    // 사진이 대부분인 장만 색감을 원본에 맞춘다 (도형·글상자 위주 디자인은 색이 틀어질 수 있어 그대로)
-    const matched = photoShare >= 40 ? await matchColors(raw, source.data).catch(() => null) : null;
-    return `data:image/jpeg;base64,${(matched ?? raw).toString("base64")}`;
-  }
   if (!source) {
     res = await client.images.generate({ ...common, prompt: textPrompt(topic) });
   } else {
