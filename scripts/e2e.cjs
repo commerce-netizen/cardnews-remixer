@@ -62,21 +62,25 @@ const BASE = `http://127.0.0.1:${PORT}`;
       assert.equal(head, "data:image/jpeg;", "자동 생성된 AI 사진");
       assert.deepEqual([w, h], [1080, 1350]);
     }
-    assert.ok(await page.locator("button:has-text('이전 사진으로')").first().isVisible(), "원래 사진으로 되돌릴 수 있다");
+    // 원본 사진(글씨 박힘)으로는 되돌리지 않는다 — 새 글과 겹치기 때문
+    assert.equal(await page.locator("button:has-text('이전 사진으로')").count(), 0, "원본 사진으로 되돌리기 없음");
+    // '원본 디자인 그대로' 선택지·'원본 자리 그대로' 토글은 없어야 한다
+    assert.equal(await page.locator("option", { hasText: "원본 디자인" }).count(), 0);
+    assert.equal(await page.locator("text=원본 자리 그대로").count(), 0);
     console.log("✓ 버튼 없이 글·사진이 한 번에 완성 (3장 모두 1080×1350 AI 사진)");
 
     // 장마다 카드: 1번 장=표지 제목, 2번 장부터=본문
     assert.ok(await page.isVisible("text=1번 장 · 표지"));
     assert.ok(await page.isVisible("text=3번 장"));
-    await page.fill("#text0", "직접 고친\n표지 제목");
-    await page.fill("#text1", "직접 고친 본문");
+    await page.locator(".slide-rail > .card >> nth=0").locator("textarea").first().fill( "직접 고친\n표지 제목");
+    await page.locator(".slide-rail > .card >> nth=1").locator("textarea").first().fill( "직접 고친 본문");
     await page.fill("#watermark", "우리가게");
     const first = page.locator(".preview-frame >> nth=0");
     assert.ok(await first.getByText("직접 고친").isVisible());
     assert.ok(await first.getByText("[광고]").isVisible());
     assert.ok(await first.getByText("우리가게").isVisible());
     assert.ok(await page.locator(".preview-frame >> nth=1").getByText("직접 고친 본문").isVisible());
-    assert.equal(await page.locator(".preview-frame", { hasText: "우리가게" }).count(), 3);
+    assert.equal(await page.locator(".slide-rail .preview-frame", { hasText: "우리가게" }).count(), 3);
     console.log("✓ 제목·본문·워터마크 수정이 모든 장 미리보기에 반영");
 
     // 장별 사진 바꾸기
@@ -116,7 +120,7 @@ const BASE = `http://127.0.0.1:${PORT}`;
     await page.waitForSelector("text=지금 만든 카드뉴스는 사라져요");
     await page.click("button:has-text('아니요, 계속 할게요')");
     assert.ok(await page.isVisible("text=각색이 끝났어요"), "취소하면 그대로 남아 있다");
-    assert.equal(await page.inputValue("#text0"), "직접 고친\n표지 제목", "작업물 유지");
+    assert.equal(await page.locator(".slide-rail > .card >> nth=0").locator("textarea").first().inputValue(), "직접 고친\n표지 제목", "작업물 유지");
     console.log("✓ 맨 위 '← 처음으로' + 되돌릴 수 없음 확인");
 
     // 자동 DM: 템플릿 인트로 + AI 레시피 + 버튼 안내

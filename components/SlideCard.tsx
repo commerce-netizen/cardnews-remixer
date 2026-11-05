@@ -60,7 +60,7 @@ function withAccent(text: string, accent: string, color: string): ReactNode {
 }
 
 /** 글 상자 하나. 글이 상자를 넘치면 글자 크기를 자동으로 줄인다 */
-function Block({ b, height, text, mask, tick }: { b: TextBlock; height: number; text: string; mask: boolean; tick: number }) {
+function Block({ b, height, text, tick }: { b: TextBlock; height: number; text: string; tick: number }) {
   const p = useRef<HTMLParagraphElement>(null);
   const box = useRef<HTMLDivElement>(null);
 
@@ -79,7 +79,6 @@ function Block({ b, height, text, mask, tick }: { b: TextBlock; height: number; 
     }
   }, [text, b.size, b.fontId, b.weight, b.w, b.h, b.lineHeight, b.letterSpacing, b.box, b.boxPad, height, tick]);
 
-  const masked = mask && !b.box && b.behind;
   const wrapStyle: CSSProperties = {
     position: "absolute",
     left: (b.x / 100) * SLIDE_W,
@@ -91,7 +90,7 @@ function Block({ b, height, text, mask, tick }: { b: TextBlock; height: number; 
     flexDirection: "column",
     justifyContent: JUSTIFY[b.vAlign],
     padding: b.box ? b.boxPad : 0,
-    background: b.box ? rgba(b.boxColor, b.boxOpacity) : masked ? b.behind : undefined,
+    background: b.box ? rgba(b.boxColor, b.boxOpacity) : undefined,
     borderRadius: b.box ? b.boxRadius : 0,
     border: b.box && b.boxBorder ? `1.5px solid ${rgba(b.boxBorderColor, 60)}` : undefined,
     overflow: "hidden",
@@ -155,7 +154,7 @@ export const SlideCanvas = forwardRef<HTMLDivElement, CanvasProps>(function Slid
         // 계정 이름 자리에는 내 워터마크 문구가 들어간다
         const text = b.role === "handle" && wm ? wm : b.text;
         if (!text.trim()) return null;
-        return <Block key={b.id} b={b} height={height} text={text} mask={!!slide.maskOriginal} tick={tick} />;
+        return <Block key={b.id} b={b} height={height} text={text} tick={tick} />;
       })}
 
       {/* 쿠팡 파트너스 고지 — 광고 게시물이면 꼭 넣는다 */}

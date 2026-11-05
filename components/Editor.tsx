@@ -19,7 +19,6 @@ import {
   newBlock,
   slideHeight,
   styleOf,
-  type BlockStyle,
   type TextBlock,
   type TextRole,
 } from "@/lib/layout";
@@ -40,22 +39,18 @@ import {
   type Template,
   type WatermarkStyle,
 } from "@/lib/templates";
-import type { Mode, Slide } from "@/lib/types";
-
-/** 원본 디자인 모드에서 'AI가 찾은 원본 모양 그대로'를 뜻하는 특별한 선택지 */
-const ORIGINAL = "__original__";
+import type { Slide } from "@/lib/types";
 
 type Props = {
-  mode: Mode;
-  slides: Slide[];
-  /** AI가 각색한 캡션 (레시피 모드는 CTA·고지 없이 본문만) */
-  captionBody: string;
-  /** AI가 만든 자동 DM 레시피 (레시피 모드) */
-  dmContent: DmContent | null;
-  /** 광고·쿠팡 파트너스 게시물로 보이는지 (원본 디자인 모드) */
+  /** 음식·레시피 카드뉴스인지 (false = 정치·시사·패션 등 일반 → 캡션 CTA·고정 댓글·자동 DM 없음) */
+  recipe: boolean;
+  /** 쿠팡 파트너스·광고 게시물인지 ([광고] 표시·고지 기본값) */
   commerce: boolean;
-  /** AI가 쿠팡 레시피 게시물로 판단 → 템플릿 CTA·고정 댓글·자동 DM까지 */
-  recipe?: boolean;
+  slides: Slide[];
+  /** AI가 각색한 캡션 본문 (CTA·고지 없이) */
+  captionBody: string;
+  /** AI가 만든 자동 DM 레시피 */
+  dmContent: DmContent | null;
   onChangeSlides: Dispatch<SetStateAction<Slide[]>>;
   onRemixAgain: () => void;
   onRestart: () => void;
@@ -63,21 +58,18 @@ type Props = {
 
 type Sel = { slide: number; id: string } | null;
 
-export default function Editor({ mode, slides, captionBody, dmContent, commerce, recipe = false, onChangeSlides, onRemixAgain, onRestart }: Props) {
-  const design = mode === "design";
-  // 캡션 CTA·고정 댓글·DM이 필요한 쿠팡 레시피 게시물인지 (레시피 각색이거나 AI가 그렇게 판단)
-  const coupang = !design || recipe;
+export default function Editor({ recipe, commerce, slides, captionBody, dmContent, onChangeSlides, onRemixAgain, onRestart }: Props) {
   const [caption, setCaption] = useState("");
   const [dm, setDm] = useState("");
   const [dmCopied, setDmCopied] = useState(false);
   const [pinned, setPinned] = useState("");
   const [pinnedCopied, setPinnedCopied] = useState(false);
   const [templates, setTemplates] = useState<Template[]>(BUILTIN_TEMPLATES);
-  const [templateId, setTemplateId] = useState(design ? ORIGINAL : DEFAULT_TEMPLATE.id);
-  const [keepPosition, setKeepPosition] = useState(true);
+  const [templateId, setTemplateId] = useState(DEFAULT_TEMPLATE.id);
   const [watermark, setWatermark] = useState<WatermarkStyle>(DEFAULT_TEMPLATE.watermark);
-  const [adLabel, setAdLabel] = useState(design ? commerce : true);
-  const [disclose, setDisclose] = useState(design ? commerce : true);
+  const [adLabel, setAdLabel] = useState(commerce);
+  // 일반 카드뉴스: 쿠팡 파트너스 고지를 캡션에 붙일지 (레시피는 항상 붙음)
+  const [disclose, setDisclose] = useState(commerce);
   const [showTemplates, setShowTemplates] = useState(false);
   const [askRestart, setAskRestart] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
@@ -94,30 +86,19 @@ export default function Editor({ mode, slides, captionBody, dmContent, commerce,
   const nodes = useRef<(HTMLDivElement | null)[]>([]);
   const editorRef = useRef<HTMLElement>(null);
   const resultBlobs = useRef<Blob[]>([]);
-  // 원본 디자인 모드: AI가 처음 잡아 준 모양 (언제든 되돌릴 수 있게)
-  const originalStyles = useRef<Map<string, Partial<BlockStyle>>>(new Map());
 
-  const template = useMemo(
-    () => (templateId === ORIGINAL ? DEFAULT_TEMPLATE : findTemplate(templates, templateId)),
-    [templates, templateId],
-  );
+  const template = useMemo(() => findTemplate(templates, templateId), [templates, templateId]);
 
   const say = (msg: string) => {
     setToast(msg);
     setTimeout(() => setToast((t) => (t === msg ? null : t)), 2500);
   };
 
-  // 저장해 둔 템플릿 목록을 불러온다. 레시피 모드는 지난번에 고른 템플릿으로 시작
+  // 저장해 둔 템플릿 목록(기본 제공 + 내가 만든 것)을 불러와 지난번에 고른 템플릿으로 시작
   useEffect(() => {
     const list = allTemplates();
     setTemplates(list);
-    slides.forEach((s) => s.blocks.forEach((b) => originalStyles.current.set(b.id, styleOf(b))));
-    const t = findTemplate(list, loadActiveId());
-    if (design) {
-      setWatermark({ ...t.watermark });
-    } else {
-      applyTemplate(t.id, list);
-    }
+    applyTemplate(findTemplate(list, loadActiveId()).id, list);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -130,39 +111,33 @@ export default function Editor({ mode, slides, captionBody, dmContent, commerce,
     loadFonts(JSON.parse(fontKey));
   }, [fontKey]);
 
-  // 캡션: 레시피 모드 = 템플릿 CTA + AI 본문 + 쿠팡 고지 / 원본 디자인 모드 = AI 캡션 (+ 고지)
+  // 캡션: 레시피 = 템플릿 CTA + AI 본문 + 쿠팡 고지 / 일반 = AI 캡션 (+ 고지)
   useEffect(() => {
     setCaption(
-      coupang ? buildCaption(captionBody, template) : [captionBody.trim(), disclose ? DISCLOSURE : ""].filter(Boolean).join("\n\n"),
+      recipe ? buildCaption(captionBody, template) : [captionBody.trim(), disclose ? DISCLOSURE : ""].filter(Boolean).join("\n\n"),
     );
     setResults(null);
-  }, [captionBody, template, coupang, disclose]);
+  }, [captionBody, template, recipe, disclose]);
 
   useEffect(() => {
-    setDm(coupang ? buildDm(dmContent, template) : "");
-    setPinned(coupang ? template.pinnedComment : "");
-  }, [dmContent, template, coupang]);
+    setDm(recipe ? buildDm(dmContent, template) : "");
+    setPinned(recipe ? template.pinnedComment : "");
+  }, [dmContent, template, recipe]);
 
   const setSlides = (fn: (prev: Slide[]) => Slide[]) => {
     onChangeSlides(fn);
     setResults(null);
   };
 
-  /** 템플릿 고르기 — 모든 장의 글 상자에 역할별 모양을 입힌다 */
-  function applyTemplate(id: string, list: Template[] = templates, withPos = design ? !keepPosition : true) {
-    setTemplateId(id);
-    setResults(null);
-    if (id === ORIGINAL) {
-      setSlides((prev) =>
-        prev.map((s) => ({ ...s, blocks: s.blocks.map((b) => ({ ...b, ...(originalStyles.current.get(b.id) ?? {}) })) })),
-      );
-      return;
-    }
+  /** 템플릿 고르기 — 모든 장의 글 상자에 역할별 모양(글꼴·크기·색·위치)을 입힌다 */
+  function applyTemplate(id: string, list: Template[] = templates) {
     const t = findTemplate(list, id);
+    setTemplateId(t.id);
+    setResults(null);
     saveActiveId(t.id);
     setWatermark({ ...t.watermark });
-    setAdLabel(t.adLabel && (!design || commerce));
-    setSlides((prev) => prev.map((s) => ({ ...s, blocks: applyTemplateToBlocks(s.blocks, t, withPos) })));
+    setAdLabel(t.adLabel && commerce);
+    setSlides((prev) => prev.map((s) => ({ ...s, blocks: applyTemplateToBlocks(s.blocks, t, true) })));
   }
 
   const updateSlide = (i: number, patch: Partial<Slide>) => setSlides((prev) => prev.map((s, j) => (j === i ? { ...s, ...patch } : s)));
@@ -229,7 +204,7 @@ export default function Editor({ mode, slides, captionBody, dmContent, commerce,
   const replaceImage = async (i: number, file?: File) => {
     if (!file) return;
     try {
-      updateSlide(i, { image: await resizeImage(file, 1600, 0.9), maskOriginal: false });
+      updateSlide(i, { image: await resizeImage(file, 1600, 0.9) });
       forgetPrev(i);
     } catch (e) {
       setError((e as Error).message);
@@ -243,11 +218,11 @@ export default function Editor({ mode, slides, captionBody, dmContent, commerce,
     const current = s.image;
     try {
       const text = s.blocks.map((b) => b.text).join("\n");
-      // 원본 디자인 모드는 항상 원본 슬라이드에서 다시 만든다 (글자 지우기 + 구도만 변경)
-      const from = design ? (s.sourceImage ?? current) : current;
-      const image = await makeAiPhoto(from, text, "", SLIDE_W, slideHeight(s.ratio), design ? { mode: "design", photoShare: s.photoShare } : {});
+      // 원본 사진에서 다시 만든다 (같은 음식·색감, 구도만 변경, 글자 제거). 원본이 없으면 지금 사진, 그것도 없으면 글로
+      const from = s.sourceImage ?? current;
+      const image = await makeAiPhoto(from, text, "", SLIDE_W, slideHeight(s.ratio));
       setPrevImages((p) => ({ ...p, [i]: current }));
-      updateSlide(i, { image, maskOriginal: false });
+      updateSlide(i, { image });
     } catch (e) {
       setError(`${i + 1}번 장: ${(e as Error).message}`);
       window.scrollTo(0, 0);
@@ -256,14 +231,10 @@ export default function Editor({ mode, slides, captionBody, dmContent, commerce,
     }
   };
 
-  /** 되돌릴 사진: 직전 사진이 없으면 각색 전 원본 사진 */
-  // 원본 디자인 모드는 원본 이미지로 되돌리지 않는다 (저작권 — 결과물엔 AI 이미지나 내가 올린 사진만)
-  const undoTarget = (i: number) => (i in prevImages ? prevImages[i] : design ? null : (slides[i].sourceImage ?? null));
-  const canUndo = (i: number) =>
-    i in prevImages || (!design && !!(slides[i].sourceImage && slides[i].sourceImage !== slides[i].image));
+  /** 직전 사진으로 되돌리기 (원본 사진으로는 되돌리지 않는다 — 글씨가 박혀 겹치고 저작권 문제도 있음) */
+  const canUndo = (i: number) => i in prevImages;
   const undoImage = (i: number) => {
-    const image = undoTarget(i);
-    updateSlide(i, { image, maskOriginal: false });
+    updateSlide(i, { image: prevImages[i] ?? null });
     forgetPrev(i);
   };
 
@@ -337,23 +308,11 @@ export default function Editor({ mode, slides, captionBody, dmContent, commerce,
           <div>
             <label className="field-label" htmlFor="template">역할(제목·본문…)별 글꼴·크기·색·위치를 한 번에 입혀요</label>
             <select id="template" value={templateId} onChange={(e) => applyTemplate(e.target.value)}>
-              {design && <option value={ORIGINAL}>원본 디자인 그대로 (AI가 찾은 모양)</option>}
               {templates.map((t) => (
                 <option key={t.id} value={t.id}>{t.name}{t.builtin ? " (기본 제공)" : ""}</option>
               ))}
             </select>
           </div>
-          {design && (
-            <Toggle
-              label="글 위치는 원본 자리 그대로"
-              hint="끄면 템플릿에 저장된 위치로 옮겨요"
-              checked={keepPosition}
-              onChange={(v) => {
-                setKeepPosition(v);
-                if (templateId !== ORIGINAL) applyTemplate(templateId, templates, !v);
-              }}
-            />
-          )}
           <button className="btn btn-secondary btn-block" onClick={() => setShowTemplates(true)}>
             🎨 템플릿 만들기 · 고치기
           </button>
@@ -366,7 +325,7 @@ export default function Editor({ mode, slides, captionBody, dmContent, commerce,
         <section className="card stack">
           <h2 style={{ margin: 0 }}>② 워터마크 · 표시</h2>
           <div>
-            <label className="field-label" htmlFor="watermark">모든 장에 들어가는 내 채널 이름 (원본의 계정 이름 자리에도 들어가요)</label>
+            <label className="field-label" htmlFor="watermark">모든 장에 들어가는 내 채널 이름</label>
             <input
               id="watermark"
               type="text"
@@ -382,7 +341,7 @@ export default function Editor({ mode, slides, captionBody, dmContent, commerce,
           </div>
           <Range label="워터마크 크기" value={watermark.size} min={14} max={80} unit="px" onChange={(size) => setWatermark({ ...watermark, size })} />
           <Toggle label="[광고] 표시" hint="쿠팡 파트너스·협찬 게시물이면 꼭 켜 두세요" checked={adLabel} onChange={(v) => { setAdLabel(v); setResults(null); }} />
-          {!coupang && (
+          {!recipe && (
             <Toggle label="캡션에 쿠팡 파트너스 고지 붙이기" checked={disclose} onChange={setDisclose} />
           )}
         </section>
@@ -448,22 +407,22 @@ export default function Editor({ mode, slides, captionBody, dmContent, commerce,
                   <input type="file" accept="image/*" hidden onChange={(e) => { replaceImage(i, e.target.files?.[0]); e.target.value = ""; }} />
                 </label>
                 {s.image && (
-                  <button className="btn btn-secondary" onClick={() => { updateSlide(i, { image: null, maskOriginal: false }); forgetPrev(i); }}>
+                  <button className="btn btn-secondary" onClick={() => { updateSlide(i, { image: null }); forgetPrev(i); }}>
                     사진 빼기
                   </button>
                 )}
                 {IMAGE_GEN_ENABLED && (s.image || s.sourceImage) && (
                   <button className="btn btn-secondary" onClick={() => generateImage(i)} disabled={genIndex !== null || !!busy}>
-                    {genIndex === i ? "새 이미지 만드는 중…" : s.image ? "✨ AI 새 이미지 다시 만들기" : "✨ AI 새 이미지 만들기"}
+                    {genIndex === i ? "새 사진 만드는 중…" : s.image ? "✨ AI 새 사진 다시 만들기" : "✨ AI 새 사진 만들기"}
                   </button>
                 )}
                 {canUndo(i) && genIndex !== i && (
                   <button className="btn btn-secondary" onClick={() => undoImage(i)} disabled={!!busy}>↩ 이전 사진으로</button>
                 )}
               </div>
-              {design && !s.image && s.sourceImage && genIndex !== i && (
+              {!s.image && s.sourceImage && genIndex !== i && (
                 <p className="muted small" style={{ margin: 0 }}>
-                  이 장은 아직 AI 이미지가 없어요. <b>✨ AI 새 이미지 만들기</b>를 눌러 주세요. 원본 이미지는 저작권 때문에 그대로 쓰지 않아요.
+                  이 장은 아직 사진이 없어요. <b>✨ AI 새 사진 만들기</b>를 눌러 주세요.
                 </p>
               )}
               {s.original && (
@@ -533,7 +492,7 @@ export default function Editor({ mode, slides, captionBody, dmContent, commerce,
         <section className="card">
           <h2>캡션 (본문 글)</h2>
           <textarea rows={12} value={caption} onChange={(e) => { setCaption(e.target.value); setResults(null); }} aria-label="캡션" />
-          {coupang && (
+          {recipe && (
             <p className="muted small" style={{ margin: "12px 0 0" }}>
               맨 윗줄·맨 아랫줄 문구는 <b>템플릿</b>에서 바꿀 수 있어요. 여기서 고친 건 이번 한 번만 적용돼요.
             </p>
@@ -543,7 +502,7 @@ export default function Editor({ mode, slides, captionBody, dmContent, commerce,
           </button>
         </section>
 
-        {coupang && (
+        {recipe && (
           <section className="card">
             <h2>고정 댓글</h2>
             <p className="muted small" style={{ margin: "0 0 14px" }}>
@@ -575,7 +534,7 @@ export default function Editor({ mode, slides, captionBody, dmContent, commerce,
         <section className="card" style={{ borderColor: "var(--ok)" }}>
           <h2>완성! 🎉</h2>
           <p>
-            컴퓨터에는 <b>압축 파일(zip)</b>로 저장됐어요. 사진과 함께 <b>캡션{coupang ? "·고정 댓글·자동 DM" : ""} 글</b>도 들어 있어요. 휴대폰에서는 아래 사진을 <b>길게 눌러 저장</b>하거나 저장 버튼을 누르세요.
+            컴퓨터에는 <b>압축 파일(zip)</b>로 저장됐어요. 사진과 함께 <b>캡션{recipe ? "·고정 댓글·자동 DM" : ""} 글</b>도 들어 있어요. 휴대폰에서는 아래 사진을 <b>길게 눌러 저장</b>하거나 저장 버튼을 누르세요.
           </p>
           <div className="thumbs">
             {results.map((u, i) => (

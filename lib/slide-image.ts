@@ -13,13 +13,12 @@ export async function makeAiPhoto(
   body: string,
   width: number,
   height: number,
-  opts: { mode?: "food" | "design"; photoShare?: number } = {},
 ): Promise<string> {
   const source = image ? await resizeImage(image, 1536, 0.85) : null;
   const res = await fetch("/api/image-gen", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ image: source, title, body, ...opts }),
+    body: JSON.stringify({ image: source, title, body }),
   });
   const data = await res.json().catch(() => ({}));
   if (!res.ok || !data.image) {

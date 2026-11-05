@@ -259,7 +259,7 @@ export default function TemplateManager({ onClose, onPick }: Props) {
             </div>
           )}
           <p className="muted small" style={{ margin: 0 }}>
-            레시피 모드는 표지에 <b>제목</b>, 2번 장부터 <b>본문</b>을 써요. 원본 디자인 모드는 AI가 찾은 글마다 역할이 붙어서, 여기서 정한 역할 모양이 입혀져요.
+            표지(1번 장)에는 <b>제목</b>, 2번 장부터는 <b>본문</b> 모양이 입혀져요. 글 상자를 직접 추가하면 다른 역할도 쓸 수 있어요.
           </p>
           <StylePanel style={st} sample={SAMPLE_TEXT[role].split("\n")[0]} onChange={(p) => patch(role, p)} />
         </section>

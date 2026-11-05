@@ -6,23 +6,12 @@ import Editor from "@/components/Editor";
 import { prepareImages, type PreparedImage } from "@/lib/client-images";
 import { IMAGE_GEN_ENABLED, makeAiPhoto } from "@/lib/slide-image";
 import type { DmContent } from "@/lib/dm";
-import { SLIDE_W, clampRatio, newBlock, slideHeight, styleOf, type LayoutResult } from "@/lib/layout";
+import { SLIDE_W, newBlock, styleOf } from "@/lib/layout";
 import { allTemplates, findTemplate, loadActiveId } from "@/lib/templates";
-import type { ExtractResult, Mode, RemixRequest, RemixResult, Slide } from "@/lib/types";
+import type { ExtractResult, RemixRequest, RemixResult, Slide } from "@/lib/types";
 
 
-/** 사진 비율(높이÷폭) */
-function imageRatio(src: string | null): Promise<number> {
-  if (!src) return Promise.resolve(1.25);
-  return new Promise((resolve) => {
-    const el = new Image();
-    el.onload = () => resolve(clampRatio(el.naturalHeight / el.naturalWidth));
-    el.onerror = () => resolve(1.25);
-    el.src = src;
-  });
-}
-
-/** 레시피 모드: 1번 장은 제목 상자, 2번 장부터 본문 상자 (지금 고른 템플릿 모양으로) */
+/** 1번 장은 제목 상자, 2번 장부터 본문 상자 (지금 고른 템플릿 모양으로) */
 function recipeBlocks(i: number, title: string, body: string) {
   const t = findTemplate(allTemplates(), loadActiveId());
   return i === 0
@@ -66,17 +55,17 @@ export default function Home() {
   // AI가 각색한 캡션 본문 (CTA·고지 문구는 Editor가 템플릿대로 붙인다)
   const [caption, setCaption] = useState("");
   const [dmContent, setDmContent] = useState<DmContent | null>(null);
-  // 어떤 방식으로 만들었는지 (사용자가 고르지 않음: 사진이 있으면 원본 구성 분석, 글만 있으면 레시피 각색)
-  const [usedMode, setUsedMode] = useState<Mode>("design");
-  const [commerce, setCommerce] = useState(false);
-  const [recipe, setRecipe] = useState(false);
+  // AI가 원본을 보고 판단: 레시피 카드뉴스인지(→ CTA·고정 댓글·DM), 광고 게시물인지
+  const [recipe, setRecipe] = useState(true);
+  const [commerce, setCommerce] = useState(true);
 
   /**
    * 글 각색과 AI 새 사진을 **동시에** 돌린다.
    * 사진 편집은 원본 사진만 있으면 되므로 각색 결과를 기다릴 필요가 없다 —
    * 그래서 전체 시간이 '둘 중 느린 쪽' 하나로 끝난다.
    */
-  const runRemix = async (src: Source, back: Step, withImages = true) => {
+  const runRemix = async (src: Source, back: Step, keepImages?: (string | null)[]) => {
+    const withImages = !keepImages;
     setError(null);
     setStep("loading");
     const photos = withImages && IMAGE_GEN_ENABLED ? src.images.filter(Boolean).length : 0;
@@ -93,7 +82,7 @@ export default function Home() {
       makeAiPhoto(img, "", "", SLIDE_W, 1350)
         .catch(() => {
           failed.push(i + 1);
-          return null; // 실패한 장은 원본 사진을 그대로 쓴다
+          return null; // 실패한 장은 빈 바탕 (원본엔 글씨가 박혀 있어 새 글과 겹치고, 저작권 문제도 있음)
         })
         .then((v) => {
           done += 1;
@@ -119,7 +108,8 @@ export default function Home() {
           const origin = src.images[i] ?? null;
           // 디자인 틀: 1번 장은 제목만, 2번 장부터는 본문만 보인다. AI가 칸을 잘못 채워도 글이 사라지지 않게 합친다.
           return {
-            image: aiImages[i] ?? origin,
+            // 결과물엔 AI가 새로 만든 사진만 쓴다. 원본은 'AI 새 사진' 재료로만 보관
+            image: keepImages ? (keepImages[i] ?? null) : (aiImages[i] ?? (IMAGE_GEN_ENABLED ? null : origin)),
             sourceImage: origin,
             original: r.slides[i]?.original ?? "",
             ratio: 1.25,
@@ -130,11 +120,12 @@ export default function Home() {
       );
       setCaption(r.caption);
       setDmContent(r.dm ?? null);
-      setUsedMode("recipe");
+      setRecipe(r.recipe !== false);
+      setCommerce(r.commerce !== false);
       setSource(src);
       setInfo(
         failed.length
-          ? `${failed.join("·")}번 장은 사진을 새로 만들지 못해서 원래 사진을 그대로 뒀어요. 그 장의 ✨ AI 새 사진을 다시 눌러 보세요.`
+          ? `${failed.join("·")}번 장은 AI 사진을 못 만들어서 비워 뒀어요. 그 장의 ✨ AI 새 사진 만들기를 다시 눌러 주세요.`
           : null,
       );
       setStep("edit");
@@ -145,96 +136,7 @@ export default function Home() {
     }
   };
 
-  /**
-   * 원본 디자인 모드: 장마다 구성(글 위치·모양)을 읽고 새 글을 쓰는 것과,
-   * 원본 슬라이드에서 글자만 지우고 사진 구도를 바꾼 새 배경을 만드는 것을 **동시에** 돌린다.
-   * keep: 다시 각색할 때 지금 사진·글 모양을 그대로 두고 글만 바꾼다.
-   */
-  const runDesign = async (src: Source, back: Step, keep?: Slide[]) => {
-    if (!src.images.some(Boolean)) return runRemix(src, back);
-    setError(null);
-    setStep("loading");
-    const withImages = !keep && IMAGE_GEN_ENABLED;
-    setLoadingMsg(
-      withImages
-        ? "원본 구성을 읽고 카드뉴스를 새로 만들고 있어요…\n1~3분 정도 걸려요. 화면을 닫지 마세요."
-        : "글을 새로 쓰고 있어요…\n1분 정도 걸려요. 화면을 닫지 마세요.",
-    );
-    let done = 0;
-    const failed: number[] = [];
-    const total = src.images.filter(Boolean).length;
-    try {
-      const ratios = await Promise.all(src.images.map(imageRatio));
-      const [r, aiImages] = await Promise.all([
-        postJson<LayoutResult>("/api/layout", src.request),
-        withImages
-          ? Promise.all(
-              src.images.map((img, i) =>
-                img
-                  ? makeAiPhoto(img, "", "", SLIDE_W, slideHeight(ratios[i]), { mode: "design" })
-                      .catch(() => {
-                        failed.push(i + 1);
-                        return null; // 실패한 장은 원본 사진을 쓰지 않는다 (저작권) — 바탕색만 두고 다시 만들게 안내
-                      })
-                      .then((v) => {
-                        done += 1;
-                        if (done >= total) setLoadingMsg("마무리하고 있어요…\n거의 다 됐어요.");
-                        else if (done >= total / 2) setLoadingMsg("거의 다 만들었어요…\n조금만 기다려 주세요.");
-                        return v;
-                      })
-                  : Promise.resolve(null),
-              ),
-            )
-          : Promise.resolve([] as (string | null)[]),
-      ]);
-      setSlides(
-        r.slides.map((ls, i) => {
-          const prev = keep?.[i];
-          if (prev) {
-            // 다시 각색: 사진·모양은 그대로, 글 상자 수가 같으면 글만 바꾼다
-            const same = prev.blocks.length === ls.blocks.length;
-            return {
-              ...prev,
-              original: ls.original,
-              blocks: same ? prev.blocks.map((b, j) => ({ ...b, text: ls.blocks[j].text, accent: ls.blocks[j].accent })) : ls.blocks,
-            };
-          }
-          const origin = src.images[i] ?? null;
-          const ai = aiImages[i] ?? null;
-          return {
-            // 원본 이미지는 저작권 때문에 결과물에 쓰지 않는다. AI 새 이미지 생성용으로만 보관
-            image: ai,
-            sourceImage: origin,
-            original: ls.original,
-            ratio: ratios[i] ?? ls.ratio,
-            bg: ls.bg,
-            blocks: ls.blocks,
-            maskOriginal: false,
-            photoShare: ls.photoShare,
-          };
-        }),
-      );
-      setCaption(r.caption);
-      setDmContent(r.dm);
-      setCommerce(r.commerce || r.recipe);
-      setRecipe(r.recipe);
-      setUsedMode("design");
-      setSource(src);
-      setInfo(
-        failed.length
-          ? `${failed.join("·")}번 장은 AI 이미지를 못 만들어서 바탕색만 넣어 뒀어요. 그 장의 ✨ AI 새 이미지를 다시 눌러 주세요. (원본 이미지는 저작권 때문에 쓰지 않아요)`
-          : null,
-      );
-      setStep("edit");
-      window.scrollTo(0, 0);
-    } catch (e) {
-      setError((e as Error).message);
-      setStep(back);
-    }
-  };
-
-  // 종류는 사용자가 고르지 않는다 — 사진이 있으면 AI가 원본을 보고 판단(레시피면 DM까지), 글만 있으면 레시피 각색
-  const run = (src: Source, back: Step) => runDesign(src, back);
+  const run = (src: Source, back: Step) => runRemix(src, back);
 
   const startFromUrl = async (target = url) => {
     if (!target.trim()) {
@@ -428,19 +330,15 @@ export default function Home() {
       {step === "edit" && info && <div className="notice notice-info">{info}</div>}
       {step === "edit" && source && (
         <Editor
-          mode={usedMode}
-          commerce={commerce}
+          key={`${recipe}-${commerce}`}
           recipe={recipe}
+          commerce={commerce}
           slides={slides}
           captionBody={caption}
           dmContent={dmContent}
           onChangeSlides={setSlides}
-          // 다시 각색해도 사용자가 바꾼 사진은 유지
-          onRemixAgain={() =>
-            usedMode === "design"
-              ? runDesign(source, "edit", slides)
-              : runRemix({ ...source, images: slides.map((s) => s.image) }, "edit", false)
-          }
+          // 다시 각색: 글만 새로 쓰고, 지금 사진(사용자가 바꾼 것 포함)은 그대로 둔다
+          onRemixAgain={() => runRemix(source, "edit", slides.map((s) => s.image))}
           onRestart={restart}
         />
       )}

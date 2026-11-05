@@ -14,16 +14,7 @@ export type Slide = {
   bg: string;
   /** 사진 위에 얹는 글 상자들 */
   blocks: TextBlock[];
-  /**
-   * 원본 디자인 모드에서 image가 아직 '글자가 박힌 원본'이면 true —
-   * 새 글 뒤에 원래 글씨를 가리는 바탕을 깐다. AI가 글자를 지운 사진이나 직접 올린 사진이면 false.
-   */
-  maskOriginal?: boolean;
-  /** 원본 디자인 모드: 사진이 차지하는 비율 (AI 새 사진 색감 맞추기용) */
-  photoShare?: number;
 };
-
-export type Mode = "design" | "recipe";
 
 export type ExtractResult = {
   imageUrls: string[];
@@ -44,6 +35,10 @@ export type RemixRequest = {
 export type RemixResult = {
   slides: { original: string; title: string; body: string }[];
   caption: string;
-  /** 자동 DM용 레시피 (인트로·CTA·고지는 화면에서 템플릿대로 붙인다) */
-  dm: DmContent;
+  /** 음식·레시피 카드뉴스인지 (false = 정치·시사·패션 등 일반 카드뉴스 → CTA·고정 댓글·DM 없음) */
+  recipe: boolean;
+  /** 쿠팡 파트너스·광고 게시물인지 ([광고] 표시·고지 기본값) */
+  commerce: boolean;
+  /** 자동 DM용 레시피 (레시피일 때만. 인트로·CTA·고지는 화면에서 템플릿대로 붙인다) */
+  dm: DmContent | null;
 };
