@@ -153,12 +153,12 @@ export default function AdminPanel() {
             {shown.map((m) => (
               <div className="member" key={m.id}>
                 <div className="member-main">
-                  <b className="member-email">{m.email}</b>
+                  <b className="member-email">{m.email || "(이메일 없음)"}</b>
                   <span className={`member-badge s-${m.status}`}>{STATUS_LABEL[m.status]}</span>
                   {m.hasKey && <span className="member-badge s-key">키 등록</span>}
                 </div>
                 <div className="member-meta">
-                  {m.provider === "google" ? "구글" : "이메일"} 가입 {day(m.createdAt)} · 마지막 접속 {day(m.lastSignIn)}
+                  {m.provider === "google" ? "구글" : m.provider === "kakao" ? "카카오" : "이메일"} 가입 {day(m.createdAt)} · 마지막 접속 {day(m.lastSignIn)}
                 </div>
                 {m.status !== "admin" && (
                   <div className="row">

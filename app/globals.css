@@ -943,8 +943,12 @@ input[type="range"] { width: 100%; height: 32px; accent-color: var(--primary); }
   width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center;
   background: var(--primary); color: #fff; font-size: 0.78rem; font-weight: 800;
 }
+.btn-kakao { background: #fee500; color: #191919; border: 1px solid #fee500; display: inline-flex; align-items: center; justify-content: center; gap: 12px; }
+.btn-kakao:hover { background: #fada0a; }
 .btn-google { background: #fff; color: #1f1f1f; border: 1px solid #dadce0; display: inline-flex; align-items: center; justify-content: center; gap: 12px; }
-:root[data-theme="dark"] .btn-google { background: #fff; color: #1f1f1f; }
+:root[data-theme="dark"] .btn-kakao { background: #fee500; color: #191919; border: 1px solid #fee500; display: inline-flex; align-items: center; justify-content: center; gap: 12px; }
+.btn-kakao:hover { background: #fada0a; }
+.btn-google { background: #fff; color: #1f1f1f; }
 .or-line { display: flex; align-items: center; gap: 12px; color: var(--muted); font-size: 0.85rem; }
 .or-line::before, .or-line::after { content: ""; flex: 1; height: 1px; background: var(--line); }
 .kv { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; }

@@ -7,7 +7,7 @@ import { supabaseBrowser } from "@/lib/supabase/client";
 
 type Mode = "login" | "signup";
 
-/** 로그인·회원가입 — 구글 버튼 하나, 또는 이메일·비밀번호 */
+/** 로그인·회원가입 — 카카오·구글 버튼, 또는 이메일·비밀번호 */
 export default function LoginForm() {
   const sb = supabaseBrowser();
   const router = useRouter();
@@ -31,12 +31,12 @@ export default function LoginForm() {
 
   const callback = (to: string) => `${window.location.origin}/auth/callback?next=${encodeURIComponent(to)}`;
 
-  const google = async () => {
+  const social = async (provider: "google" | "kakao") => {
     setError(null);
     setBusy(true);
-    const { error: e } = await sb.auth.signInWithOAuth({ provider: "google", options: { redirectTo: callback(next) } });
+    const { error: e } = await sb.auth.signInWithOAuth({ provider, options: { redirectTo: callback(next) } });
     if (e) {
-      setError("구글 로그인을 시작하지 못했어요. 잠시 뒤 다시 눌러 주세요.");
+      setError(`${provider === "kakao" ? "카카오" : "구글"} 로그인을 시작하지 못했어요. 잠시 뒤 다시 눌러 주세요.`);
       setBusy(false);
     }
   };
@@ -86,7 +86,13 @@ export default function LoginForm() {
       {info && <div className="notice notice-info" role="status">{info}</div>}
 
       <div className="card stack">
-        <button className="btn btn-google btn-huge" onClick={google} disabled={busy}>
+        <button className="btn btn-kakao btn-huge" onClick={() => social("kakao")} disabled={busy}>
+          <svg viewBox="0 0 24 24" aria-hidden="true" width="24" height="24">
+            <path fill="#191919" d="M12 3C6.48 3 2 6.54 2 10.9c0 2.8 1.86 5.26 4.66 6.66l-.95 3.48c-.08.3.26.55.53.38l4.15-2.74c.53.07 1.07.1 1.61.1 5.52 0 10-3.54 10-7.88S17.52 3 12 3z" />
+          </svg>
+          카카오로 {mode === "login" ? "로그인" : "시작하기"}
+        </button>
+        <button className="btn btn-google btn-huge" onClick={() => social("google")} disabled={busy}>
           <svg viewBox="0 0 48 48" aria-hidden="true" width="24" height="24">
             <path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.7 32.7 29.2 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34.1 6.1 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.4-.4-3.5z"/>
             <path fill="#FF3D00" d="m6.3 14.7 6.6 4.8C14.7 15.1 19 12 24 12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34.1 6.1 29.3 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"/>
