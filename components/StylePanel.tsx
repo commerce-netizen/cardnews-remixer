@@ -82,7 +82,7 @@ export default function StylePanel({ style: st, onChange, sample }: Props) {
         </div>
       )}
 
-      <ColorField label="강조 낱말 색" value={st.accentColor} presets={["#ffe14d", "#ff5a3c", "#2f6bff", "#1b7f3a", "#ffffff", "#1c1c1e"]} onChange={(accentColor) => onChange({ accentColor })} />
+      <ColorField label="강조 줄 색 (X = 강조 안 함)" allowNone value={st.accentColor} presets={["#ffe14d", "#ff5a3c", "#2f6bff", "#1b7f3a", "#ffffff", "#1c1c1e"]} onChange={(accentColor) => onChange({ accentColor })} />
 
       <button type="button" className="link-btn" style={{ alignSelf: "flex-start" }} onClick={() => setMore((v) => !v)}>
         {more ? "▲ 위치 숫자 닫기" : "▼ 위치·크기 숫자로 맞추기"}

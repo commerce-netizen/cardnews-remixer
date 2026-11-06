@@ -903,3 +903,23 @@ input[type="range"] { width: 100%; height: 32px; accent-color: var(--primary); }
 .tpl-shots-3 figcaption { font-size: 0.8rem; color: var(--muted); text-align: center; }
 .layout-pick .fav-btn { top: 12px; left: 12px; width: 32px; height: 32px; }
 .layout-pick .fav-btn svg { width: 17px; height: 17px; }
+
+/* 강조 줄 고르기 · 색 없음(X) 칸 */
+.line-picks { display: flex; flex-direction: column; gap: 6px; }
+.line-pick {
+  display: flex; align-items: center; gap: 10px; text-align: left;
+  font: inherit; font-size: 0.95rem; color: var(--text); cursor: pointer;
+  background: var(--surface); border: 2px solid var(--line-strong); border-radius: var(--radius-sm);
+  padding: 8px 12px; min-height: 44px;
+}
+.line-pick.on { border-color: var(--primary); background: var(--primary-soft); font-weight: 700; }
+.line-no {
+  flex: none; width: 24px; height: 24px; border-radius: 6px; display: grid; place-items: center;
+  font-size: 0.78rem; font-weight: 800; background: var(--bg-soft); color: var(--muted);
+}
+.line-pick.on .line-no { background: var(--primary); color: #fff; }
+.swatch-none {
+  background: var(--surface) !important;
+  background-image: linear-gradient(45deg, transparent 46%, #e0245e 46%, #e0245e 54%, transparent 54%),
+    linear-gradient(-45deg, transparent 46%, #e0245e 46%, #e0245e 54%, transparent 54%) !important;
+}

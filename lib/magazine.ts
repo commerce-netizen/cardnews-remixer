@@ -135,7 +135,7 @@ function canvas(ctx: LayoutCtx) {
         role,
         original: "",
         text,
-        accent: "",
+        accentLines: [],
         field,
         slot: slotOf(field, role),
         fieldPre: pre || undefined,
@@ -163,7 +163,7 @@ function canvas(ctx: LayoutCtx) {
         role: "label",
         original: "",
         text,
-        accent: "",
+        accentLines: [],
         field,
         slot: slotOf(field, "label"),
       } as TextBlock);

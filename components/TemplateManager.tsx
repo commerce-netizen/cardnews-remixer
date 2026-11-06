@@ -85,7 +85,7 @@ function sampleSlide(t: Template, side: Side): Slide {
     role: r,
     original: "",
     text: SAMPLE_TEXT[r],
-    accent: r === "title" ? "떡볶이" : r === "body" ? "쫄깃한" : "",
+    accentLines: r === "title" || r === "body" ? [2] : [],
   }));
   return { image: null, original: "", ratio: 1.25, bg: "#3a3a3a", blocks };
 }
