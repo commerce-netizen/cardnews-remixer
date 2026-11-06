@@ -726,16 +726,42 @@ input[type="range"] { width: 100%; height: 32px; accent-color: var(--primary); }
   text-decoration: none;
   padding: 4px 6px 2px 0;
 }
-/* 입체감: 아래·오른쪽으로 한 겹씩 짙은 색을 쌓아 두께를 만들고, 맨 아래 부드러운 그림자 */
+/* 입체감: 0.25px씩 촘촘히 짙은 색을 쌓아 매끈한 두께(1px씩 쌓으면 대각선이 계단처럼 깨짐) + 맨 아래 부드러운 그림자 */
 .brand-don {
   color: var(--primary);
-  text-shadow: 1px 1px 0 var(--logo-blue-side), 2px 2px 0 var(--logo-blue-side), 3px 3px 0 var(--logo-blue-deep),
-    4px 5px 6px var(--logo-drop);
+  text-shadow: 0.25px 0.25px 0 var(--logo-blue-side),
+    0.5px 0.5px 0 var(--logo-blue-side),
+    0.75px 0.75px 0 var(--logo-blue-side),
+    1.0px 1.0px 0 var(--logo-blue-side),
+    1.25px 1.25px 0 var(--logo-blue-side),
+    1.5px 1.5px 0 var(--logo-blue-side),
+    1.75px 1.75px 0 var(--logo-blue-side),
+    2.0px 2.0px 0 var(--logo-blue-side),
+    2.25px 2.25px 0 var(--logo-blue-side),
+    2.5px 2.5px 0 var(--logo-blue-side),
+    2.75px 2.75px 0 var(--logo-blue-side),
+    3.0px 3.0px 0 var(--logo-blue-deep),
+    3.25px 3.25px 0 var(--logo-blue-deep),
+    3.5px 3.5px 0 var(--logo-blue-deep),
+    4px 5px 7px var(--logo-drop);
 }
 .brand-rest {
   color: var(--text);
-  text-shadow: 1px 1px 0 var(--logo-ink-side), 2px 2px 0 var(--logo-ink-side), 3px 3px 0 var(--logo-ink-deep),
-    4px 5px 6px var(--logo-drop);
+  text-shadow: 0.25px 0.25px 0 var(--logo-ink-side),
+    0.5px 0.5px 0 var(--logo-ink-side),
+    0.75px 0.75px 0 var(--logo-ink-side),
+    1.0px 1.0px 0 var(--logo-ink-side),
+    1.25px 1.25px 0 var(--logo-ink-side),
+    1.5px 1.5px 0 var(--logo-ink-side),
+    1.75px 1.75px 0 var(--logo-ink-side),
+    2.0px 2.0px 0 var(--logo-ink-side),
+    2.25px 2.25px 0 var(--logo-ink-side),
+    2.5px 2.5px 0 var(--logo-ink-side),
+    2.75px 2.75px 0 var(--logo-ink-side),
+    3.0px 3.0px 0 var(--logo-ink-deep),
+    3.25px 3.25px 0 var(--logo-ink-deep),
+    3.5px 3.5px 0 var(--logo-ink-deep),
+    4px 5px 7px var(--logo-drop);
 }
 .brand-sub {
   margin-left: 10px;

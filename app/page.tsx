@@ -238,6 +238,7 @@ export default function Home() {
             <Link className="tab" href="/templates">디자인 템플릿</Link>
           </nav>
           <h1>사진 콘텐츠 만들기</h1>
+          <p className="lead">주소만 넣으면 새 사진·새 글로 다시 만들어 드려요.</p>
 
           {error && <div className="notice notice-error" role="alert">{error}</div>}
 
