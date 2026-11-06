@@ -41,14 +41,14 @@ const BASE = `http://127.0.0.1:${PORT}`;
 
     // 인스타가 아닌 주소 → 수동 화면으로 안내
     await page.fill("#url", "https://example.com/p/abc");
-    await page.click("button:has-text('카드뉴스 새로 만들기')");
+    await page.click("button:has-text('새로 만들기')");
     await page.waitForSelector("text=직접 올려서 만들기");
     assert.ok(await page.isVisible("text=인스타그램 주소만"));
     console.log("✓ 추출 실패 시 수동 업로드 화면으로 이동");
 
     await page.setInputFiles("input[type=file]", files);
     await page.waitForSelector(".thumb >> nth=2");
-    await page.click("button:has-text('카드뉴스 새로 만들기')");
+    await page.click("button:has-text('새로 만들기')");
     await page.waitForSelector("text=각색이 끝났어요", { timeout: 60_000 });
     assert.equal(await page.locator(".preview-frame").count(), 3);
     console.log("✓ 사진 3장 → 슬라이드 3장 각색(데모)");
