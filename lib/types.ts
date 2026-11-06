@@ -15,8 +15,8 @@ export type Slide = {
   bg: string;
   /** 사진 위에 얹는 글 상자들 */
   blocks: TextBlock[];
-  /** 장 템플릿 id (썸네일·내지·마지막 장 — lib/page-templates.ts) */
-  page?: string;
+  /** 템플릿 조합의 마지막 장 (AI가 쓰지 않는 고정 장 — 템플릿을 바꾸면 새로 붙는다) */
+  fixedLast?: boolean;
   /** 양식 id (없으면 글 상자만 있는 기본 장) */
   layout?: string;
   /** 매거진 레이아웃 칸 값 (색만 바꿀 때 AI 없이 다시 그리는 데 씀) */
