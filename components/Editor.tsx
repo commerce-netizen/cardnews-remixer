@@ -552,35 +552,6 @@ export default function Editor({ recipe, commerce, slides, captionBody, dmConten
             </h2>
             <button className="btn btn-secondary btn-sm" onClick={() => setSel(null)}>닫기 ✕</button>
           </div>
-          <div>
-            <span className="field-label">강조할 줄 (누른 줄 전체가 강조 색으로 바뀌어요)</span>
-            <div className="line-picks">
-              {selected.text.split("\n").map((line, li) => {
-                const on = selected.accentLines?.includes(li + 1);
-                return (
-                  <button
-                    key={li}
-                    type="button"
-                    className={`line-pick${on ? " on" : ""}`}
-                    style={on && selected.accentColor ? { borderColor: selected.accentColor } : undefined}
-                    onClick={() =>
-                      updateBlock(sel.slide, selected.id, {
-                        accentLines: on
-                          ? (selected.accentLines ?? []).filter((n) => n !== li + 1)
-                          : [...(selected.accentLines ?? []), li + 1].sort((x, y) => x - y),
-                      })
-                    }
-                  >
-                    <span className="line-no">{li + 1}</span>
-                    {line.trim() || "(빈 줄)"}
-                  </button>
-                );
-              })}
-            </div>
-            {!selected.accentColor && selected.accentLines?.length ? (
-              <p className="muted small" style={{ margin: "6px 0 0" }}>강조 줄 색이 X(없음)라서 지금은 강조가 안 보여요. 아래에서 색을 골라 주세요.</p>
-            ) : null}
-          </div>
           <div className="split">
             <div className="sticky">
               <SlidePreview
@@ -596,6 +567,7 @@ export default function Editor({ recipe, commerce, slides, captionBody, dmConten
           <StylePanel
             style={selected}
             sample={selected.text.split("\n")[0]}
+            lines={selected.text.split("\n").length}
             onChange={(patch) => updateBlock(sel.slide, selected.id, patch)}
           />
           <div className="stack sub">

@@ -14,10 +14,12 @@ type Props = {
   onChange: (patch: Partial<BlockStyle>) => void;
   /** 미리보기 글 (글꼴 고르기 칸에 보여 줌) */
   sample?: string;
+  /** 이 글의 줄 수 (강조 줄 고르기 위·아래 한계). 모르면 10 */
+  lines?: number;
 };
 
 /** 글 상자 하나의 모양을 전부 조절하는 칸: 글꼴·굵기·크기·색·정렬·간격·위치·글상자·테두리·그림자·강조색 */
-export default function StylePanel({ style: st, onChange, sample }: Props) {
+export default function StylePanel({ style: st, onChange, sample, lines = 10 }: Props) {
   const [more, setMore] = useState(false);
   const weights = fontWeights(st.fontId);
 
@@ -82,6 +84,7 @@ export default function StylePanel({ style: st, onChange, sample }: Props) {
         </div>
       )}
 
+      <AccentLine st={st} lines={lines} onChange={onChange} />
       <ColorField label="강조 줄 색 (X = 강조 안 함)" allowNone value={st.accentColor} presets={["#ffe14d", "#ff5a3c", "#2f6bff", "#1b7f3a", "#ffffff", "#1c1c1e"]} onChange={(accentColor) => onChange({ accentColor })} />
 
       <button type="button" className="link-btn" style={{ alignSelf: "flex-start" }} onClick={() => setMore((v) => !v)}>
@@ -98,6 +101,30 @@ export default function StylePanel({ style: st, onChange, sample }: Props) {
       <p className="muted small" style={{ margin: 0 }}>
         미리보기에서 글을 <b>끌면 옮겨지고</b>, 오른쪽 아래 <b>손잡이를 끌면 상자 크기</b>가 바뀌어요. 글이 상자보다 길면 글자가 알아서 작아져요.
       </p>
+    </div>
+  );
+}
+
+/**
+ * 강조할 줄 — 위·아래 버튼으로 몇 번째 줄을 강조할지 옮긴다.
+ * 글이 몇 줄일지 미리 모르니(두 줄·세 줄…) 번호를 직접 고르게 한다. 0 = 강조 안 함.
+ */
+function AccentLine({ st, lines, onChange }: { st: BlockStyle; lines: number; onChange: (p: Partial<BlockStyle>) => void }) {
+  const cur = st.accentLines?.[0] ?? 0;
+  const max = Math.max(1, lines);
+  const set = (n: number) => onChange({ accentLines: n > 0 ? [n] : [] });
+  return (
+    <div>
+      <span className="field-label">강조할 줄</span>
+      <div className="line-stepper">
+        <button type="button" className="btn btn-secondary btn-sm" onClick={() => set(Math.max(0, cur - 1))} disabled={cur === 0} aria-label="위 줄로">
+          ▲ 위 줄
+        </button>
+        <b className="line-stepper-value">{cur === 0 ? "강조 안 함" : `${cur}번째 줄`}</b>
+        <button type="button" className="btn btn-secondary btn-sm" onClick={() => set(Math.min(max, cur + 1))} disabled={cur >= max} aria-label="아래 줄로">
+          ▼ 아래 줄
+        </button>
+      </div>
     </div>
   );
 }
