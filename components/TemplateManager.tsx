@@ -789,11 +789,11 @@ export default function TemplateManager({ onClose, onPick }: Props) {
         {t.builtin ? (
           <button className="btn btn-secondary" onClick={() => copy(t)}>복제해서 고치기</button>
         ) : (
-          <>
+          <div className="tpl-actions">
             <button className="btn btn-secondary" onClick={() => edit(t)}>✎ 고치기</button>
             <button className="btn btn-secondary" onClick={() => copy(t)}>복제</button>
             <button className="btn btn-secondary" onClick={() => setAskDelete(t.id)}>지우기</button>
-          </>
+          </div>
         )}
       </div>
       {askDelete === t.id && (
