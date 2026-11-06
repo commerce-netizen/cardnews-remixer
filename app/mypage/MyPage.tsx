@@ -6,7 +6,15 @@ import { useEffect, useState } from "react";
 import { signedOut } from "@/lib/cloud-sync";
 import { supabaseBrowser } from "@/lib/supabase/client";
 
-type KeyState = { loggedIn: boolean; email?: string; hasKey?: boolean; last4?: string | null; updatedAt?: string | null };
+type KeyState = {
+  loggedIn: boolean;
+  email?: string;
+  member?: "active" | "blocked" | "none";
+  isAdmin?: boolean;
+  hasKey?: boolean;
+  last4?: string | null;
+  updatedAt?: string | null;
+};
 
 /** 마이페이지 — 내 계정 + 내 OpenAI API 키(설정) + 로그아웃 */
 export default function MyPage() {
@@ -19,6 +27,7 @@ export default function MyPage() {
   const [error, setError] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [askDelete, setAskDelete] = useState(false);
+  const [code, setCode] = useState("");
 
   const load = async () => {
     const res = await fetch("/api/me/key");
@@ -59,6 +68,23 @@ export default function MyPage() {
     }
   };
 
+  const join = async () => {
+    setError(null);
+    setBusy(true);
+    try {
+      const res = await fetch("/api/me/join", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ code }) });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || "확인하지 못했어요.");
+      setCode("");
+      setToast("환영해요! 이제 아래에 내 OpenAI API 키를 넣으면 바로 쓸 수 있어요.");
+      await load();
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const remove = async () => {
     await fetch("/api/me/key", { method: "DELETE" });
     setAskDelete(false);
@@ -83,9 +109,39 @@ export default function MyPage() {
       <section className="card stack">
         <h2 style={{ margin: 0 }}>내 계정</h2>
         <div className="kv"><span>이메일</span><b>{st.email}</b></div>
+        <div className="kv">
+          <span>이용 상태</span>
+          <b>{st.isAdmin ? "관리자" : st.member === "active" ? "이용 중" : st.member === "blocked" ? "이용 중지" : "시크릿 코드 필요"}</b>
+        </div>
+        {st.isAdmin && <Link className="btn btn-primary" href="/admin">🔐 관리자 모드</Link>}
         <button className="btn btn-secondary" onClick={logout}>로그아웃</button>
       </section>
 
+      {st.member === "blocked" && (
+        <div className="notice notice-error">이용이 중지된 계정이에요. 운영자에게 문의해 주세요.</div>
+      )}
+
+      {st.member === "none" && (
+        <section className="card stack">
+          <h2 style={{ margin: 0 }}>시크릿 코드 넣기</h2>
+          <p className="muted small" style={{ margin: 0 }}>돈작가 사진 생성기는 초대받은 분만 무료로 쓸 수 있어요. 받은 시크릿 코드를 한 번만 넣어 주세요.</p>
+          <input
+            type="text"
+            value={code}
+            onChange={(e) => setCode(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && code.trim() && join()}
+            placeholder="예) DON-XXXXXX"
+            autoComplete="off"
+            spellCheck={false}
+            style={{ textTransform: "uppercase", letterSpacing: "0.05em" }}
+          />
+          <button className="btn btn-primary btn-block" onClick={join} disabled={busy || !code.trim()}>
+            {busy ? "확인 중…" : "코드 확인하고 시작하기"}
+          </button>
+        </section>
+      )}
+
+      {st.member === "active" && (
       <section className="card stack">
         <h2 style={{ margin: 0 }}>설정 · 내 OpenAI API 키</h2>
         <p className="muted small" style={{ margin: 0 }}>
@@ -144,6 +200,7 @@ export default function MyPage() {
           <p className="muted small" style={{ margin: 0 }}>대략 게시물 1개(4장, 사진 포함)에 수십~백 원대예요. 사진 없이 글만이면 훨씬 적어요.</p>
         </details>
       </section>
+      )}
 
       <div style={{ textAlign: "center" }}>
         <Link className="link-btn" href="/">← 사진 콘텐츠 만들기로</Link>

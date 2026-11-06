@@ -19,3 +19,23 @@ create table if not exists public.user_data (
   updated_at timestamptz not null default now()
 );
 alter table public.user_data enable row level security;
+
+-- 회원 (시크릿 코드를 넣고 들어온 사람). status: active = 이용 중, blocked = 관리자가 내보냄
+create table if not exists public.members (
+  user_id uuid primary key references auth.users (id) on delete cascade,
+  email text,
+  status text not null default 'active' check (status in ('active', 'blocked')),
+  joined_at timestamptz not null default now()
+);
+alter table public.members enable row level security;
+
+-- 사이트 설정 (한 줄) — 시크릿 코드는 관리자 모드에서 바꾼다
+create table if not exists public.app_settings (
+  id int primary key default 1 check (id = 1),
+  invite_code text not null,
+  updated_at timestamptz not null default now()
+);
+alter table public.app_settings enable row level security;
+insert into public.app_settings (id, invite_code)
+values (1, 'DON-' || upper(substr(md5(random()::text), 1, 6)))
+on conflict (id) do nothing;

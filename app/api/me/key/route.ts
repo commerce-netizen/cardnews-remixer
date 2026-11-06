@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { seal } from "@/lib/secret-box";
 import { AUTH_ENABLED } from "@/lib/supabase/env";
 import { currentUser, supabaseAdmin } from "@/lib/supabase/server";
+import { isAdmin, memberStatus } from "@/lib/members";
 
 export const runtime = "nodejs";
 
@@ -11,8 +12,20 @@ export async function GET() {
   if (!AUTH_ENABLED) return NextResponse.json({ auth: false });
   const user = await currentUser();
   if (!user) return NextResponse.json({ auth: true, loggedIn: false }, { status: 401 });
-  const { data } = await supabaseAdmin().from("user_secrets").select("key_last4, updated_at").eq("user_id", user.id).maybeSingle();
-  return NextResponse.json({ auth: true, loggedIn: true, email: user.email, hasKey: !!data, last4: data?.key_last4 ?? null, updatedAt: data?.updated_at ?? null });
+  const [{ data }, member] = await Promise.all([
+    supabaseAdmin().from("user_secrets").select("key_last4, updated_at").eq("user_id", user.id).maybeSingle(),
+    memberStatus(user),
+  ]);
+  return NextResponse.json({
+    auth: true,
+    loggedIn: true,
+    email: user.email,
+    member,
+    isAdmin: isAdmin(user),
+    hasKey: !!data,
+    last4: data?.key_last4 ?? null,
+    updatedAt: data?.updated_at ?? null,
+  });
 }
 
 /** 키 저장 — 먼저 OpenAI에 실제로 붙어 보고(모델 목록 조회, 비용 없음) 맞으면 암호화해서 저장 */
@@ -20,6 +33,10 @@ export async function PUT(req: Request) {
   if (!AUTH_ENABLED) return NextResponse.json({ error: "로그인 기능이 꺼져 있어요." }, { status: 400 });
   const user = await currentUser();
   if (!user) return NextResponse.json({ error: "로그인이 필요해요." }, { status: 401 });
+  const st = await memberStatus(user);
+  if (st !== "active") {
+    return NextResponse.json({ error: st === "blocked" ? "이용이 중지된 계정이에요." : "시크릿 코드를 먼저 넣어 주세요." }, { status: 403 });
+  }
   const body = (await req.json().catch(() => null)) as { key?: string } | null;
   const key = body?.key?.trim() ?? "";
   if (!/^sk-[A-Za-z0-9_\-]{20,}$/.test(key)) {

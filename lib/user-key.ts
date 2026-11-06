@@ -3,6 +3,7 @@ import { hasApiKey, isMockMode } from "./openai";
 import { unseal } from "./secret-box";
 import { AUTH_ENABLED } from "./supabase/env";
 import { currentUser, supabaseAdmin } from "./supabase/server";
+import { BlockedError, NeedCodeError, requireMember } from "./members";
 
 export class NeedLoginError extends UserFacingError {}
 export class NeedKeyError extends UserFacingError {}
@@ -21,6 +22,7 @@ export async function requestApiKey(): Promise<string> {
   }
   const user = await currentUser();
   if (!user) throw new NeedLoginError("로그인이 필요해요. 오른쪽 위 '로그인'을 눌러 주세요.");
+  await requireMember(user);
   const { data } = await supabaseAdmin().from("user_secrets").select("openai_key_enc").eq("user_id", user.id).maybeSingle();
   if (!data?.openai_key_enc) throw new NeedKeyError("마이페이지에서 내 OpenAI API 키를 먼저 넣어 주세요.");
   try {
@@ -33,6 +35,6 @@ export async function requestApiKey(): Promise<string> {
 /** 오류 → HTTP 상태 (로그인 필요 401, 키 필요 403) */
 export function statusOf(e: unknown, fallback = 502): number {
   if (e instanceof NeedLoginError) return 401;
-  if (e instanceof NeedKeyError) return 403;
+  if (e instanceof NeedKeyError || e instanceof NeedCodeError || e instanceof BlockedError) return 403;
   return fallback;
 }
