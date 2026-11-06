@@ -1,7 +1,7 @@
 import Link from "next/link";
 import TemplateManager from "@/components/TemplateManager";
 
-export const metadata = { title: "디자인 템플릿 · 사진 콘텐츠 만들기" };
+export const metadata = { title: "디자인 템플릿 · 돈작가" };
 
 export default function TemplatesPage() {
   return (

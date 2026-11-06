@@ -1,7 +1,7 @@
 import Link from "next/link";
 import HotBoard from "./HotBoard";
 
-export const metadata = { title: "인기 게시물 · 사진 콘텐츠 만들기" };
+export const metadata = { title: "인기 게시물 · 돈작가" };
 
 export default function HotPage() {
   return (
