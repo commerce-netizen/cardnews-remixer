@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import Editor from "@/components/Editor";
+import Link from "next/link";
 import { DIRTY_ATTR } from "@/components/SiteNav";
 import { prepareImages, type PreparedImage } from "@/lib/client-images";
 import { IMAGE_GEN_ENABLED, makeAiPhoto } from "@/lib/slide-image";
@@ -148,7 +149,45 @@ export default function Home() {
 
   const run = (src: Source, back: Step) => runRemix(src, back);
 
+  /**
+   * 로그인을 켰을 때: 로그인 안 했으면 'login', 키를 안 넣었으면 'key'. 꺼져 있으면 null.
+   * (만들기 버튼을 누르기 전에 미리 안내해서 1~2분 기다렸다 실패하는 일이 없게)
+   */
+  const [gate, setGate] = useState<"login" | "key" | null>(null);
+  useEffect(() => {
+    fetch("/api/me/key")
+      .then(async (res) => {
+        const d = await res.json().catch(() => ({}));
+        if (d.auth === false) return setGate(null);
+        if (res.status === 401 || !d.loggedIn) return setGate("login");
+        setGate(d.hasKey ? null : "key");
+      })
+      .catch(() => {});
+  }, []);
+  const gateNotice = gate && (
+    <div className="notice notice-info gate">
+      {gate === "login" ? (
+        <>
+          <p style={{ margin: "0 0 12px" }}><b>로그인하면 바로 만들 수 있어요.</b> 구글 계정으로 10초면 돼요.</p>
+          <Link className="btn btn-primary" href="/login?next=/">로그인 · 회원가입</Link>
+        </>
+      ) : (
+        <>
+          <p style={{ margin: "0 0 12px" }}><b>내 OpenAI API 키를 넣으면 바로 만들 수 있어요.</b> 마이페이지에서 한 번만 넣으면 돼요.</p>
+          <Link className="btn btn-primary" href="/mypage">마이페이지에서 키 넣기</Link>
+        </>
+      )}
+    </div>
+  );
+  const blocked = () => {
+    if (!gate) return false;
+    setError(gate === "login" ? "먼저 로그인해 주세요." : "먼저 마이페이지에서 OpenAI API 키를 넣어 주세요.");
+    window.scrollTo(0, 0);
+    return true;
+  };
+
   const startFromUrl = async (target = url) => {
+    if (blocked()) return;
     if (!target.trim()) {
       setError("먼저 위 칸에 인스타그램 게시물 주소를 붙여 넣어 주세요.");
       return;
@@ -209,6 +248,7 @@ export default function Home() {
   };
 
   const startManual = () => {
+    if (blocked()) return;
     if (!uploads.length && !slideText.trim()) {
       setError("사진을 올리거나, 글을 붙여 넣어 주세요. (둘 중 하나는 꼭 필요해요)");
       return;
@@ -251,6 +291,7 @@ export default function Home() {
       {step === "home" && (
         <>
           <h1>사진 콘텐츠 만들기</h1>
+          {gateNotice}
           <p className="lead">주소만 넣으면 새 사진·새 글로 다시 만들어 드려요.</p>
 
           {error && <div className="notice notice-error" role="alert">{error}</div>}
@@ -286,6 +327,7 @@ export default function Home() {
       {step === "manual" && (
         <>
           <h1>직접 올려서 만들기</h1>
+          {gateNotice}
           <p className="lead">사진을 올리고, 글이 있으면 붙여 넣어 주세요. 사진 속 글씨는 AI가 읽어요.</p>
 
           {info && <div className="notice notice-info" style={{ whiteSpace: "pre-line" }}>{info}</div>}

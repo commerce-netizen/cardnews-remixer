@@ -292,6 +292,16 @@ Playwright는 저장소 의존성에 넣지 않았습니다. 테스트 전에 `n
 | `IG_DOC_ID` | | 인스타 GraphQL doc_id. 인스타 변경으로 자동 추출이 깨지면 교체 |
 | `JINA_API_KEY` | | r.jina.ai 호출 한도를 늘릴 때 (없어도 동작) |
 | `MOCK_LLM` | | `1`이면 데모 모드. **실서비스에선 비워 두기** |
+| `NEXT_PUBLIC_SUPABASE_URL` | | 로그인 켜기 — Supabase 프로젝트 주소. 넣으면 **로그인 필수 + 각자 OpenAI 키** 방식으로 바뀜 (바꾸면 재배포) |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | | 로그인 켜기 — Supabase 공개(anon) 키 |
+| `SUPABASE_SERVICE_ROLE_KEY` | | 로그인 켜기 — Supabase 관리자(service_role) 키. **서버 전용, 절대 공개 금지** |
+| `KEY_ENCRYPTION_SECRET` | | 로그인 켜기 — 사용자 OpenAI 키 암호화용 비밀값 (`openssl rand -base64 32`). **바꾸면 저장된 키를 못 풂** |
+
+### 로그인 + 각자 API 키 (선택)
+Supabase 4개 값을 넣으면 회원가입(구글·이메일)·마이페이지가 켜지고, AI는 **각 사용자가 마이페이지에 넣은 OpenAI 키**로 돈다
+(글·사진 규칙과 모델은 서버 고정이라 품질은 같음). 키는 AES-256-GCM으로 암호화해 `user_secrets` 표에 저장, 화면엔 끝 4자리만.
+내 템플릿·즐겨찾기는 `user_data` 표로 계정에 동기화. 표 만들기: `supabase/schema.sql`을 Supabase SQL Editor에서 실행.
+값이 없으면 예전처럼 로그인 없이 `OPENAI_API_KEY` 하나로 동작.
 
 `/api/remix`는 30초~1분 걸릴 수 있어 `maxDuration = 120`, `/api/image-gen`은 1~2분 걸릴 수 있어 `maxDuration = 240`으로 두었습니다
 (요금제별 함수 최대 실행 시간을 확인하세요).

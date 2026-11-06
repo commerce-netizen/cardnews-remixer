@@ -27,6 +27,7 @@ import {
 } from "@/lib/templates";
 import type { Slide } from "@/lib/types";
 import { KIND_LABEL, getLayout, layoutsOf, type Fields, type LayoutKind } from "@/lib/magazine";
+import { DATA_EVENT } from "@/lib/cloud-sync";
 import { DEFAULT_COMBO, favFirst, loadFavorites, samplePage, saveFavorites, type Combo, type PageSpec } from "@/lib/page-templates";
 
 const ACCENTS = ["#e5481c", "#2b6fff", "#0b4a8f", "#2fb79a", "#f2b705", "#d6336c", "#141414"];
@@ -130,9 +131,15 @@ export default function TemplateManager({ onClose, onPick }: Props) {
   const [slot, setSlot] = useState<string | null>(null);
 
   useEffect(() => {
-    setTemplates(allTemplates());
-    setActiveId(loadActiveId());
-    setFav(loadFavorites());
+    const load = () => {
+      setTemplates(allTemplates());
+      setActiveId(loadActiveId());
+      setFav(loadFavorites());
+    };
+    load();
+    // 로그인 직후 계정에 저장된 템플릿을 받아 오면 목록을 다시 읽는다
+    window.addEventListener(DATA_EVENT, load);
+    return () => window.removeEventListener(DATA_EVENT, load);
   }, []);
 
   // 목록·편집 중인 템플릿이 쓰는 글꼴을 미리 내려받아 미리보기가 제대로 보이게

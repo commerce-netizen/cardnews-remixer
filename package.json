@@ -12,6 +12,8 @@
     "test:ai": "node scripts/test-ai.mjs"
   },
   "dependencies": {
+    "@supabase/ssr": "^0.12.7",
+    "@supabase/supabase-js": "^2.119.0",
     "html-to-image": "^1.11.13",
     "jszip": "^3.10.2",
     "next": "^16.4.3",
