@@ -4,6 +4,7 @@ import { jua, logoFont, pretendard } from "@/lib/fonts";
 import Brand from "@/components/Brand";
 import ThemeToggle from "@/components/ThemeToggle";
 import SiteNav from "@/components/SiteNav";
+import AccountButton from "@/components/AccountButton";
 
 export const metadata: Metadata = {
   title: "돈작가 사진 생성기",
@@ -32,7 +33,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <header className="site-header">
           <div className="site-header-inner">
             <Brand />
-            <ThemeToggle />
+            <div className="header-right">
+              <AccountButton />
+              <ThemeToggle />
+            </div>
           </div>
           <div className="site-header-tabs">
             <SiteNav />

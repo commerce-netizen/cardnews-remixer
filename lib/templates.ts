@@ -3,6 +3,7 @@ import { DEFAULT_DM_CTA } from "./dm";
 import { DEFAULT_BODY, DEFAULT_TITLE, ROLES, styleOf, type BlockStyle, type TextBlock, type TextRole } from "./layout";
 import type { FontNeed } from "./webfonts";
 import type { Combo } from "./page-templates";
+import { schedulePush } from "./cloud-sync";
 
 /**
  * 디자인 템플릿 — 글 상자의 모양(글꼴·굵기·크기·색·위치·정렬·자간·행간·글상자·테두리·그림자·강조색)을
@@ -141,6 +142,7 @@ export function saveUserTemplates(list: Template[]): void {
   try {
     localStorage.setItem(KEY, JSON.stringify(list.filter((t) => !t.builtin)));
   } catch {}
+  schedulePush();
 }
 
 /** 고를 수 있는 전체 목록 = 기본 제공 + 내가 만든 것 */
@@ -160,6 +162,7 @@ export function saveActiveId(id: string): void {
   try {
     localStorage.setItem(ACTIVE_KEY, id);
   } catch {}
+  schedulePush();
 }
 
 export function findTemplate(list: Template[], id: string): Template {

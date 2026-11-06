@@ -7,6 +7,7 @@
 import { slideHeight, type BlockStyle } from "./layout";
 import { DEFAULT_ACCENT, SHADE_BOTTOM, getLayout, type Fields, type LayoutKind } from "./magazine";
 import type { Slide } from "./types";
+import { schedulePush } from "./cloud-sync";
 
 export type PageSpec = {
   /** 바탕이 되는 양식 id */
@@ -131,6 +132,7 @@ export function saveFavorites(fav: Set<string>): void {
   try {
     localStorage.setItem(FAV_KEY, JSON.stringify([...fav]));
   } catch {}
+  schedulePush();
 }
 
 /** 즐겨찾기 먼저, 그다음 원래 순서 */
