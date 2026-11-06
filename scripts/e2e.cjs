@@ -70,7 +70,7 @@ const BASE = `http://127.0.0.1:${PORT}`;
     console.log("✓ 버튼 없이 글·사진이 한 번에 완성 (3장 모두 1080×1350 AI 사진)");
 
     // 장마다 카드: 1번 장=표지 제목, 2번 장부터=본문
-    assert.ok(await page.isVisible("text=1번 장 · 표지"));
+    assert.ok(await page.isVisible("text=1번 장 · 썸네일"));
     assert.ok(await page.isVisible("text=3번 장"));
     await page.locator(".slide-rail > .card >> nth=0").locator("textarea").first().fill( "직접 고친\n표지 제목");
     await page.locator(".slide-rail > .card >> nth=1").locator("textarea").first().fill( "직접 고친 본문");

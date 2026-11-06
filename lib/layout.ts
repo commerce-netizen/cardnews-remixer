@@ -127,8 +127,8 @@ export function clampRatio(r: number): number {
 
 /** 기본 모양 (예전 기본 디자인: 레퍼런스를 픽셀 측정해 1080×1350에 옮긴 값) */
 export const BASE_STYLE: BlockStyle = {
-  fontId: "jua",
-  weight: 400,
+  fontId: "Pretendard",
+  weight: 700,
   size: 52,
   color: "#ffffff",
   align: "center",
@@ -158,9 +158,11 @@ export const BASE_STYLE: BlockStyle = {
 export const DEFAULT_TITLE: BlockStyle = {
   ...BASE_STYLE,
   size: 84,
+  weight: 800,
   align: "left",
   vAlign: "bottom",
   lineHeight: 1.23,
+  letterSpacing: -2,
   x: 7.1,
   y: 46,
   w: 85.8,

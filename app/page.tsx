@@ -8,7 +8,7 @@ import { IMAGE_GEN_ENABLED, makeAiPhoto } from "@/lib/slide-image";
 import type { DmContent } from "@/lib/dm";
 import { SLIDE_W, newBlock, styleOf } from "@/lib/layout";
 import { allTemplates, findTemplate, loadActiveId } from "@/lib/templates";
-import { magazineSlides } from "@/lib/magazine-client";
+import { comboSlides } from "@/lib/magazine-client";
 import type { ExtractResult, RemixRequest, RemixResult, Slide } from "@/lib/types";
 
 
@@ -111,9 +111,7 @@ export default function Home() {
             blocks: recipeBlocks(i, i === 0 ? title || body : title, i === 0 ? body : body || title),
           };
         });
-        const built = tpl.set
-          ? await magazineSlides(base, tpl.set, tpl.watermark.text, (i) => !!src.images[i])
-          : base;
+        const built = tpl.combo ? await comboSlides(base, tpl.combo, tpl.watermark.text, (i) => !!src.images[i]) : base;
         return { r, built };
       });
       const [{ r, built }, aiImages] = await Promise.all([
@@ -124,7 +122,7 @@ export default function Home() {
       ]);
 
       setSlides(
-        built.map((sl, i) => ({
+        built.map((sl, i) => sl.fixedLast ? sl : ({
           ...sl,
           // 결과물엔 AI가 새로 만든 사진만 쓴다. 원본은 'AI 새 사진' 재료로만 보관
           image: keepImages ? (keepImages[i] ?? null) : (aiImages[i] ?? (IMAGE_GEN_ENABLED ? null : (src.images[i] ?? null))),
