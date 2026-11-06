@@ -4,6 +4,7 @@ import { seal } from "@/lib/secret-box";
 import { AUTH_ENABLED } from "@/lib/supabase/env";
 import { currentUser, supabaseAdmin } from "@/lib/supabase/server";
 import { isAdmin, memberStatus } from "@/lib/members";
+import { hasApiKey } from "@/lib/openai";
 
 export const runtime = "nodejs";
 
@@ -16,13 +17,17 @@ export async function GET() {
     supabaseAdmin().from("user_secrets").select("key_last4, updated_at").eq("user_id", user.id).maybeSingle(),
     memberStatus(user),
   ]);
+  const admin = isAdmin(user);
+  // 관리자는 키를 안 넣어도 서버의 운영자 키로 쓸 수 있다
+  const serverKey = admin && !data && hasApiKey();
   return NextResponse.json({
     auth: true,
     loggedIn: true,
     email: user.email,
     member,
-    isAdmin: isAdmin(user),
-    hasKey: !!data,
+    isAdmin: admin,
+    serverKey,
+    hasKey: !!data || serverKey,
     last4: data?.key_last4 ?? null,
     updatedAt: data?.updated_at ?? null,
   });

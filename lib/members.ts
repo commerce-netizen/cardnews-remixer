@@ -11,9 +11,16 @@ export type MemberStatus = "active" | "blocked" | "none";
 export class NeedCodeError extends UserFacingError {}
 export class BlockedError extends UserFacingError {}
 
+/**
+ * 관리자 = ADMIN_EMAILS 에 있는 이메일이면서, 그 이메일이 인증됐고, 구글로 로그인한 적이 있는 계정만.
+ * (누가 이메일 가입에 관리자 주소를 적어도 메일 인증·구글 로그인을 못 하면 관리자가 될 수 없다)
+ */
 export function isAdmin(user: User | null): boolean {
   const list = (process.env.ADMIN_EMAILS ?? "").split(",").map((s) => s.trim().toLowerCase()).filter(Boolean);
-  return !!user?.email && list.includes(user.email.toLowerCase());
+  if (!user?.email || !list.includes(user.email.toLowerCase())) return false;
+  if (!user.email_confirmed_at) return false;
+  const providers = (user.app_metadata?.providers as string[] | undefined) ?? [user.app_metadata?.provider as string];
+  return providers.includes("google");
 }
 
 export async function memberStatus(user: User): Promise<MemberStatus> {

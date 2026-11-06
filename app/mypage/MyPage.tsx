@@ -11,6 +11,7 @@ type KeyState = {
   email?: string;
   member?: "active" | "blocked" | "none";
   isAdmin?: boolean;
+  serverKey?: boolean;
   hasKey?: boolean;
   last4?: string | null;
   updatedAt?: string | null;
@@ -149,7 +150,12 @@ export default function MyPage() {
           AI 사용 요금만 <b>내 OpenAI 계정</b>에서 나가요. 키는 암호화해서 저장하고, 화면에는 끝 4자리만 보여요.
         </p>
 
-        {st.hasKey ? (
+        {st.serverKey ? (
+          <div className="key-status ok">
+            <span>✓ 관리자 — 운영자 키 사용 중</span>
+            <b>따로 안 넣어도 돼요</b>
+          </div>
+        ) : st.hasKey ? (
           <div className="key-status ok">
             <span>✓ 연결됨</span>
             <b>sk-••••••••{st.last4}</b>
