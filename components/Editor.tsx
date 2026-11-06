@@ -589,12 +589,12 @@ export default function Editor({ recipe, commerce, slides, captionBody, dmConten
       <div className="trio">
         <section className="card">
           <h2>캡션 (본문 글)</h2>
-          <textarea rows={12} value={caption} onChange={(e) => { setCaption(e.target.value); setResults(null); }} aria-label="캡션" />
           {recipe && (
-            <p className="muted small" style={{ margin: "12px 0 0" }}>
+            <p className="muted small" style={{ margin: "0 0 14px" }}>
               맨 윗줄·맨 아랫줄 문구는 <b>템플릿</b>에서 바꿀 수 있어요. 여기서 고친 건 이번 한 번만 적용돼요.
             </p>
           )}
+          <textarea rows={12} value={caption} onChange={(e) => { setCaption(e.target.value); setResults(null); }} aria-label="캡션" />
           <button className="btn btn-secondary btn-block" style={{ marginTop: 16 }} onClick={() => copyText(caption, setCopied, "캡션")}>
             {copied ? "✓ 복사됐어요" : "📋 캡션 복사하기"}
           </button>
