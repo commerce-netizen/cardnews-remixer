@@ -6,7 +6,7 @@ import { getLayout, normalizeFields, type Fields, type LayoutDef } from "./magaz
 import { isMockMode, openai, TEXT_MODEL } from "./openai";
 
 /**
- * 매거진 레이아웃 칸 채우기 — 한 장의 내용(각색된 글 + 원본 글)을 고른 양식의 칸에 맞게 나눠 쓴다.
+ * 양식 칸 채우기 — 한 장의 내용(각색된 글 + 원본 글)을 고른 양식의 칸에 맞게 나눠 쓴다.
  * 후보 양식이 여럿이면(속지 '자동') 먼저 이 내용에 가장 맞는 양식을 고른다.
  */
 export type FillRequest = {
@@ -28,7 +28,7 @@ export type FillResult = { layout: string; fields: Fields };
 
 class FillError extends UserFacingError {}
 
-const SYSTEM = `당신은 인스타그램 매거진형 카드뉴스 에디터입니다.
+const SYSTEM = `당신은 인스타그램 카드뉴스 글을 정리하는 사람입니다.
 한 장에 들어갈 내용을, 주어진 '양식'의 칸에 맞게 나눠 씁니다.
 
 ■ 규칙
@@ -56,7 +56,7 @@ async function pick(client: OpenAI, defs: LayoutDef[], req: FillRequest): Promis
   const res = await client.responses.parse({
     model: TEXT_MODEL,
     instructions:
-      "인스타그램 매거진 카드뉴스 한 장의 내용을 보고, 그 내용이 가장 잘 살아나는 양식 하나를 고릅니다. " +
+      "인스타그램 카드뉴스 한 장의 내용을 보고, 그 내용이 가장 잘 살아나는 양식 하나를 고릅니다. " +
       "목록·순위·비교·일정·질문답처럼 구조가 있으면 그 구조의 양식을, 이야기·설명이면 본문형 양식을 고르세요. " +
       (req.hasPhoto ? "이 장에는 사진이 있으니 사진이 들어가는 양식을 우선합니다." : "이 장에는 사진이 없으니 사진 없는 양식을 우선합니다."),
     input: [{ role: "user", content: `<양식들>\n${list}\n</양식들>\n\n<이 장 내용>\n${req.text}\n</이 장 내용>` }],

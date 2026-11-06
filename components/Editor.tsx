@@ -40,17 +40,9 @@ import {
   type WatermarkStyle,
 } from "@/lib/templates";
 import type { Slide } from "@/lib/types";
-import { DEFAULT_ACCENT, KIND_LABEL, layoutsOf, type LayoutKind } from "@/lib/magazine";
-import {
-  applyLayout,
-  dropLayout,
-  kindFor,
-  magazineSlides,
-  redraw,
-  requestFill,
-  slideText,
-  syncField,
-} from "@/lib/magazine-client";
+import { DEFAULT_ACCENT, KIND_LABEL, type LayoutKind } from "@/lib/magazine";
+import { dropLayout, fillSlide, kindFor, magazineSlides, redraw, slideText, syncField } from "@/lib/magazine-client";
+import { BUILTIN_PAGES, allPages, favFirst, loadFavorites, type PageTemplate } from "@/lib/page-templates";
 
 /** 포인트 색 고르기 보기 */
 const ACCENTS = ["#e5481c", "#2b6fff", "#0b4a8f", "#2fb79a", "#f2b705", "#d6336c", "#141414"];
@@ -103,6 +95,9 @@ export default function Editor({ recipe, commerce, slides, captionBody, dmConten
   // 매거진 레이아웃: 포인트 색, 양식을 새로 채우는 중인 장
   const [accent, setAccent] = useState(DEFAULT_ACCENT);
   const [layoutIndex, setLayoutIndex] = useState<number | null>(null);
+  // 장 템플릿 목록(내 템플릿 + 기본 제공)과 즐겨찾기 — 장마다 '이 장 템플릿' 고르기에 쓴다
+  const [pages, setPages] = useState<PageTemplate[]>(BUILTIN_PAGES);
+  const [fav, setFav] = useState<Set<string>>(new Set());
   const nodes = useRef<(HTMLDivElement | null)[]>([]);
   const editorRef = useRef<HTMLElement>(null);
   const resultBlobs = useRef<Blob[]>([]);
@@ -118,6 +113,8 @@ export default function Editor({ recipe, commerce, slides, captionBody, dmConten
   useEffect(() => {
     const list = allTemplates();
     setTemplates(list);
+    setPages(allPages());
+    setFav(loadFavorites());
     // 슬라이드는 만들 때 이미 이 템플릿으로 그려졌다 — 모양·워터마크만 맞춘다
     const t = findTemplate(list, loadActiveId());
     setTemplateId(t.id);
@@ -173,7 +170,7 @@ export default function Editor({ recipe, commerce, slides, captionBody, dmConten
     setAdLabel(t.adLabel && commerce);
     if (t.set) {
       setAccent(t.set.accent);
-      setBusy("새 디자인에 맞게 글을 나누는 중…");
+      setBusy("템플릿에 맞게 글을 나누는 중…");
       try {
         const next = await magazineSlides(slides, t.set, t.watermark.text, (i) => !!(slides[i].image || slides[i].sourceImage));
         setSlides(() => next);
@@ -191,7 +188,7 @@ export default function Editor({ recipe, commerce, slides, captionBody, dmConten
     );
   }
 
-  /** 한 장의 양식 바꾸기 — AI가 그 장 글을 새 양식 칸에 맞게 다시 나눈다 */
+  /** 한 장의 템플릿 바꾸기 — AI가 그 장 글을 새 템플릿 칸에 맞게 다시 나눈다 */
   async function changeLayout(i: number, id: string) {
     const s = slides[i];
     setError(null);
@@ -201,16 +198,13 @@ export default function Editor({ recipe, commerce, slides, captionBody, dmConten
     }
     setLayoutIndex(i);
     try {
-      const layouts = id === AUTO_PICK ? layoutsOf(kindFor(i, slides.length)).map((l) => l.id) : [id];
-      const r = await requestFill({
-        layouts,
-        text: slideText(s),
-        original: s.original,
+      const kind = kindFor(i, slides.length);
+      const cands = id === AUTO_PICK ? BUILTIN_PAGES.filter((p) => p.kind === kind) : pages.filter((p) => p.id === id);
+      const next = await fillSlide(s, cands, { accent, handle: watermark.text }, {
         context: slides.map((x, j) => `[${j + 1}장] ${slideText(x)}`).join("\n"),
         hasPhoto: !!(s.image || s.sourceImage),
-        index: i + 1,
       });
-      setSlides((prev) => prev.map((x, j) => (j === i ? applyLayout(x, r.layout, r.fields, { accent, handle: watermark.text }) : x)));
+      setSlides((prev) => prev.map((x, j) => (j === i ? next : x)));
       setSel(null);
     } catch (e) {
       setError(`${i + 1}번 장: ${(e as Error).message}`);
@@ -459,7 +453,7 @@ export default function Editor({ recipe, commerce, slides, captionBody, dmConten
                 layoutIndex === i ? (
                   <div className="preview-overlay" role="status">
                     <div className="spinner" />
-                    <p>양식에 맞게 글을 나누는 중이에요</p>
+                    <p>템플릿에 맞게 글을 나누는 중이에요</p>
                   </div>
                 ) : genIndex === i && (
                   <div className="preview-overlay" role="status">
@@ -472,10 +466,10 @@ export default function Editor({ recipe, commerce, slides, captionBody, dmConten
 
             <div className="stack" style={{ marginTop: 20 }}>
               <div>
-                <label className="field-label" htmlFor={`layout-${i}`}>이 장 양식</label>
+                <label className="field-label" htmlFor={`layout-${i}`}>이 장 템플릿</label>
                 <select
                   id={`layout-${i}`}
-                  value={s.layout ?? ""}
+                  value={s.page ?? s.layout ?? ""}
                   disabled={layoutIndex !== null || !!busy}
                   onChange={(e) => changeLayout(i, e.target.value)}
                 >
@@ -483,7 +477,11 @@ export default function Editor({ recipe, commerce, slides, captionBody, dmConten
                   <option value={AUTO_PICK}>✨ AI가 내용에 맞게 골라 주기</option>
                   {KINDS.map((k) => (
                     <optgroup key={k} label={KIND_LABEL[k]}>
-                      {layoutsOf(k).map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
+                      {favFirst(pages.filter((p) => p.kind === k), fav).map((p) => (
+                        <option key={p.id} value={p.id}>
+                          {fav.has(p.id) ? "♥ " : ""}{p.name}{p.builtin ? "" : " (내 템플릿)"}
+                        </option>
+                      ))}
                     </optgroup>
                   ))}
                 </select>
@@ -687,7 +685,11 @@ export default function Editor({ recipe, commerce, slides, captionBody, dmConten
         <div className="overlay-page">
           <div className="page">
             <TemplateManager
-              onClose={() => setShowTemplates(false)}
+              onClose={() => {
+                setShowTemplates(false);
+                setPages(allPages());
+                setFav(loadFavorites());
+              }}
               onPick={(id) => {
                 const list = allTemplates();
                 setTemplates(list);

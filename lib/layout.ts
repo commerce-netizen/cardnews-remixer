@@ -89,7 +89,9 @@ export type TextBlock = BlockStyle & {
   text: string;
   /** 다른 색으로 강조할 낱말 (없으면 빈 문자열) */
   accent: string;
-  /** 매거진 레이아웃: 이 글이 들어가는 칸 주소 (예: "title", "items.2") */
+  /** 양식 안에서 이 글 상자의 고정 이름표 (내 템플릿에서 고친 모양을 다시 입힐 때) */
+  slot?: string;
+  /** 양식: 이 글이 들어가는 칸 주소 (예: "title", "items.2") */
   field?: string;
   /** 칸 값 앞뒤에 붙인 장식 (번호·따옴표) — 고친 글을 칸 값으로 되돌릴 때 뗀다 */
   fieldPre?: string;

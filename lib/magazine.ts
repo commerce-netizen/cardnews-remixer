@@ -1,5 +1,5 @@
 /**
- * 매거진형 레이아웃 — 표지(cover)·속지(inner)·마지막 장(last) 양식.
+ * 양식(레이아웃) — 썸네일(cover)·내지(inner)·마지막 장(last).
  *
  * 레이아웃 하나 = 칸(field) 목록 + 그 칸들로 슬라이드를 그리는 build().
  * build()는 바탕색·사진 자리·도형(띠·박스·체크칸·프로필)·글 상자들을 만든다.
@@ -11,7 +11,7 @@
 import { BASE_STYLE, SLIDE_W, blockId, type BlockStyle, type TextBlock, type TextRole } from "./layout";
 
 export type LayoutKind = "cover" | "inner" | "last";
-export const KIND_LABEL: Record<LayoutKind, string> = { cover: "표지", inner: "속지", last: "마지막 장" };
+export const KIND_LABEL: Record<LayoutKind, string> = { cover: "썸네일", inner: "내지", last: "마지막 장" };
 
 /** 사진·도형 자리 (슬라이드에 대한 %) */
 export type Rect = { x: number; y: number; w: number; h: number };
@@ -104,6 +104,9 @@ function canvas(ctx: LayoutCtx) {
   const sy = ctx.H / 1350;
   const shapes: Shape[] = [];
   const blocks: TextBlock[] = [];
+  // 글 상자마다 늘 같은 이름표(slot) — 내 템플릿에서 고친 모양을 이 이름표로 다시 입힌다
+  let n = 0;
+  const slotOf = (field: string | undefined, role: TextRole) => field ?? `${role}-${n++}`;
   const pct = (x: number, y: number, w: number, h: number): Rect => ({
     x: (x / SLIDE_W) * 100,
     y: ((y * sy) / ctx.H) * 100,
@@ -134,6 +137,7 @@ function canvas(ctx: LayoutCtx) {
         text,
         accent: "",
         field,
+        slot: slotOf(field, role),
         fieldPre: pre || undefined,
         fieldPost: post || undefined,
       } as TextBlock);
@@ -161,6 +165,7 @@ function canvas(ctx: LayoutCtx) {
         text,
         accent: "",
         field,
+        slot: slotOf(field, "label"),
       } as TextBlock);
     },
     /** 인스타 프로필 한 줄 (동그란 프로필 + 계정 이름 + 팔로우 버튼) */
@@ -196,11 +201,11 @@ const COVERS: LayoutDef[] = [
   {
     id: "cover-photo-bottom",
     kind: "cover",
-    name: "사진 + 아래 큰 제목",
-    desc: "사진 아래쪽을 어둡게, 큰 제목 세 줄",
+    name: "사진 + 하단 제목",
+    desc: "사진 아래가 어두워지고 큰 제목 세 줄",
     photo: true,
     fields: [{ key: "title", desc: "표지 제목. 정확히 3줄(\\n), 한 줄 7~13자, 궁금하게", max: 40 }],
-    sample: { title: "요즘 가장 많이 찾는\n집밥 반찬 공식\n지금 공개합니다" },
+    sample: { title: "이건\n썸네일\n입니다" },
     build(f, ctx) {
       const c = canvas(ctx);
       c.box(0, 0, 1080, 1350, { fill: SHADE_BOTTOM });
@@ -211,8 +216,8 @@ const COVERS: LayoutDef[] = [
   {
     id: "cover-photo-center",
     kind: "cover",
-    name: "사진 + 가운데 제목",
-    desc: "작은 머리글, 가운데 제목, 부제, 출처",
+    name: "사진 + 중앙 제목",
+    desc: "머리글·제목·부제·출처가 가운데에",
     photo: true,
     fields: [
       { key: "kicker", desc: "제목 위 작은 머리글 한 줄 (분야·시리즈명)", max: 16 },
@@ -220,7 +225,7 @@ const COVERS: LayoutDef[] = [
       { key: "subtitle", desc: "부제 한 줄", max: 26 },
       { key: "source", desc: "출처나 기준 한 줄 (모르면 빈 문자열)", max: 20 },
     ],
-    sample: { kicker: "에디터 노트", title: "가운데 제목이\n두 줄 들어갑니다", subtitle: "이 줄에는 부제를 한 줄로 넣습니다", source: "출처나 계정" },
+    sample: { kicker: "머리글", title: "이건\n썸네일입니다", subtitle: "부제가 들어가는 줄입니다", source: "출처" },
     build(f, ctx) {
       const c = canvas(ctx);
       c.box(0, 0, 1080, 1350, { fill: "rgba(0,0,0,0.5)" });
@@ -234,11 +239,11 @@ const COVERS: LayoutDef[] = [
   {
     id: "cover-photo-logo",
     kind: "cover",
-    name: "사진 + 가운데 큰 제목 + 로고",
-    desc: "가운데 아래 큰 제목 두 줄, 맨 아래 내 계정",
+    name: "사진 + 제목 + 계정",
+    desc: "아래쪽 큰 제목 두 줄과 내 계정 이름",
     photo: true,
     fields: [{ key: "title", desc: "큰 제목. 정확히 2줄(\\n), 한 줄 6~11자", max: 24 }],
-    sample: { title: "큰 제목 두 줄과\n가운데 정렬 썸네일" },
+    sample: { title: "이건\n썸네일입니다" },
     build(f, ctx) {
       const c = canvas(ctx);
       c.box(0, 0, 1080, 1350, { fill: SHADE_BOTTOM });
@@ -253,11 +258,11 @@ const COVERS: LayoutDef[] = [
   {
     id: "cover-black-big",
     kind: "cover",
-    name: "검정 바탕 + 큰 글씨",
-    desc: "위쪽 사진이 검정으로 스며들고, 아래쪽 아주 큰 제목",
+    name: "블랙 빅타이틀",
+    desc: "사진이 검정으로 스며들고 아주 큰 제목",
     photo: true,
     fields: [{ key: "title", desc: "아주 큰 제목. 정확히 2줄(\\n), 한 줄 5~9자", max: 20 }],
-    sample: { title: "큰 글씨 두 줄\n썸네일 예시" },
+    sample: { title: "이건\n썸네일입니다" },
     build(f, ctx) {
       const c = canvas(ctx);
       c.box(0, 0, 1080, 820, { fill: "linear-gradient(180deg, rgba(0,0,0,0) 45%, #000 100%)" });
@@ -268,11 +273,11 @@ const COVERS: LayoutDef[] = [
   {
     id: "cover-color-top",
     kind: "cover",
-    name: "색 바탕 + 위 제목",
-    desc: "강조색 바탕, 왼쪽 위 제목, 아래 사진",
+    name: "컬러 배경",
+    desc: "포인트 색 바탕, 위 제목, 아래 사진",
     photo: true,
     fields: [{ key: "title", desc: "제목. 정확히 2줄(\\n), 한 줄 7~13자", max: 28 }],
-    sample: { title: "위쪽 작은 제목 두 줄\n썸네일 예시입니다" },
+    sample: { title: "이건\n썸네일입니다" },
     build(f, ctx) {
       const c = canvas(ctx);
       c.text("title", "title", S(f.title), 80, 110, 920, 280, { ...H1, size: 80, color: "#ffffff" });
@@ -282,14 +287,14 @@ const COVERS: LayoutDef[] = [
   {
     id: "cover-book",
     kind: "cover",
-    name: "책 표지형",
-    desc: "종이 바탕, 굵은 띠 사이에 명조 제목 세 줄",
+    name: "북커버",
+    desc: "종이 바탕, 굵은 띠 사이 명조 제목",
     photo: false,
     fields: [
       { key: "kicker", desc: "머리글 한 줄 (시리즈명·호수, 예: '돈작가 노트 001')", max: 18 },
       { key: "title", desc: "명조 제목. 정확히 3줄(\\n), 한 줄 4~9자", max: 27 },
     ],
-    sample: { kicker: "머리글 한 줄 001", title: "책 제목을\n세 줄로\n넣는 표지 예시" },
+    sample: { kicker: "머리글 001", title: "이건\n썸네일\n입니다" },
     build(f, ctx) {
       const c = canvas(ctx);
       c.text("kicker", "label", S(f.kicker), 110, 500, 860, 50, { weight: 700, size: 28 });
@@ -308,8 +313,8 @@ const INNERS: LayoutDef[] = [
   {
     id: "info-table",
     kind: "inner",
-    name: "정보 표",
-    desc: "표 제목, 한 줄 소개, 항목 이름 + 내용 네 줄",
+    name: "항목 정리표",
+    desc: "제목·소개 아래 항목 이름과 내용 네 줄",
     photo: false,
     fields: [
       { key: "title", desc: "표 제목. 2줄(\\n)", max: 24 },
@@ -317,11 +322,7 @@ const INNERS: LayoutDef[] = [
       { key: "labels", desc: "항목 이름 (2~5자)", max: 6, count: 4 },
       { key: "contents", desc: "항목 내용. '· '로 시작하는 1~2줄(\\n)", max: 44, count: 4 },
     ],
-    sample: {
-      title: "표 제목을\n두 줄로 넣습니다", intro: "제목 아래에 한 줄 소개를 적습니다.",
-      labels: ["항목 이름", "항목 이름", "항목 이름", "항목 이름"],
-      contents: ["· 항목 내용을 적습니다\n· 두세 줄까지 들어갑니다", "· 항목 내용을 적습니다", "· 항목 내용을 적습니다\n· 형광펜도 쓸 수 있습니다", "· 항목 내용을 적습니다"],
-    },
+    sample: { title: "이건 항목 정리표\n템플릿입니다", intro: "이건 소개 줄입니다.", labels: ["항목 1", "항목 2", "항목 3", "항목 4"], contents: ["· 이건 내용입니다\n· 두 줄까지 들어갑니다", "· 이건 내용입니다", "· 이건 내용입니다", "· 이건 내용입니다"] },
     build(f, ctx) {
       const c = canvas(ctx);
       c.text("title", "title", S(f.title), 80, 110, 920, 200, { ...H1, size: 72 });
@@ -338,19 +339,15 @@ const INNERS: LayoutDef[] = [
   {
     id: "numbered-list",
     kind: "inner",
-    name: "번호 목록",
-    desc: "번호 붙은 항목 여덟 줄, 강조할 줄은 색으로",
+    name: "번호 리스트",
+    desc: "번호 붙은 여덟 줄, 원하는 줄만 색 강조",
     photo: false,
     fields: [
       { key: "title", desc: "목록 제목 한 줄", max: 22 },
       { key: "items", desc: "항목 한 줄 (번호 없이)", max: 24, count: 8 },
       { key: "hl", desc: "색으로 강조할 항목 번호들 (예: '3,4'). 없으면 빈 문자열", max: 10 },
     ],
-    sample: {
-      title: "이 자리에 목록 제목",
-      items: ["첫 번째 항목을 적습니다", "항목을 한 줄씩 적습니다", "강조할 줄은 색을 바꿉니다", "이 줄도 색을 바꿨습니다", "다섯 번째 항목입니다", "여섯 번째 항목입니다", "일곱 번째 항목입니다", "여덟 번째 항목입니다"],
-      hl: "3,4",
-    },
+    sample: { title: "이건 번호 리스트 템플릿입니다", items: ["첫 번째 항목입니다", "두 번째 항목입니다", "세 번째 항목입니다", "네 번째 항목입니다", "다섯 번째 항목입니다", "여섯 번째 항목입니다", "일곱 번째 항목입니다", "여덟 번째 항목입니다"], hl: "3,4" },
     build(f, ctx) {
       const c = canvas(ctx);
       c.text("title", "title", S(f.title), 80, 120, 920, 100, { ...H1, size: 64 });
@@ -367,17 +364,14 @@ const INNERS: LayoutDef[] = [
     id: "checklist",
     kind: "inner",
     name: "체크리스트",
-    desc: "제목, 노란 띠, 체크칸 여섯 줄",
+    desc: "체크칸 여섯 줄과 안내 띠",
     photo: false,
     fields: [
       { key: "title", desc: "제목. 2줄(\\n), 한 줄 4~9자", max: 20 },
       { key: "tag", desc: "띠 안 짧은 안내 (예: '하나씩 확인해 보세요')", max: 14 },
       { key: "items", desc: "확인할 일 한 줄", max: 24, count: 6 },
     ],
-    sample: {
-      title: "떠나기 전\n체크리스트", tag: "하나씩 확인해 보세요",
-      items: Array(6).fill("확인할 일을 한 줄로 적습니다"),
-    },
+    sample: { title: "이건 체크리스트\n템플릿입니다", tag: "안내 띠입니다", items: ["첫 번째 항목입니다", "두 번째 항목입니다", "세 번째 항목입니다", "네 번째 항목입니다", "다섯 번째 항목입니다", "여섯 번째 항목입니다"] },
     build(f, ctx) {
       const c = canvas(ctx);
       c.text("title", "title", S(f.title), 80, 100, 920, 230, { ...H1, size: 84 });
@@ -394,8 +388,8 @@ const INNERS: LayoutDef[] = [
   {
     id: "ranking",
     kind: "inner",
-    name: "순위표",
-    desc: "TOP 5 제목, 주제 띠, 순위 번호 + 이름 + 이유",
+    name: "TOP 랭킹",
+    desc: "1~5위 번호 + 이름 + 이유 한 줄",
     photo: false,
     fields: [
       { key: "title", desc: "순위표 제목 한 줄 (예: '자취생 필수템 TOP 5')", max: 20 },
@@ -403,11 +397,7 @@ const INNERS: LayoutDef[] = [
       { key: "names", desc: "순위 항목 이름", max: 18, count: 5 },
       { key: "reasons", desc: "그 순위인 이유 한 줄", max: 28, count: 5 },
     ],
-    sample: {
-      title: "이 자리에 TOP 5", tag: "#주제 #순위",
-      names: ["1위 이름을 적습니다", "2위 이름을 적습니다", "3위 이름을 적습니다", "4위 이름을 적습니다", "5위 이름을 적습니다"],
-      reasons: Array(5).fill("이유를 한 줄 적습니다"),
-    },
+    sample: { title: "이건 랭킹 템플릿입니다", tag: "#태그", names: ["1위 이름입니다", "2위 이름입니다", "3위 이름입니다", "4위 이름입니다", "5위 이름입니다"], reasons: Array(5).fill("이건 이유 한 줄입니다") },
     build(f, ctx) {
       const c = canvas(ctx);
       c.text("title", "title", S(f.title), 80, 100, 920, 110, { ...H1, size: 76 });
@@ -428,8 +418,8 @@ const INNERS: LayoutDef[] = [
   {
     id: "compare",
     kind: "inner",
-    name: "두 칸 비교표",
-    desc: "A·B 두 가지를 항목별로 나란히 비교",
+    name: "A/B 비교",
+    desc: "두 가지를 항목별로 나란히",
     photo: false,
     fields: [
       { key: "title", desc: "비교 제목 한 줄", max: 18 },
@@ -439,10 +429,7 @@ const INNERS: LayoutDef[] = [
       { key: "as", desc: "A의 내용. 1~2줄(\\n)", max: 22, count: 4 },
       { key: "bs", desc: "B의 내용. 1~2줄(\\n)", max: 22, count: 4 },
     ],
-    sample: {
-      title: "둘 중 뭘 살까 비교합니다", a: "A", b: "B", labels: ["가격", "크기", "장점", "단점"],
-      as: Array(4).fill("A의 내용을\n두 줄로 적습니다"), bs: Array(4).fill("B의 내용을\n두 줄로 적습니다"),
-    },
+    sample: { title: "이건 비교 템플릿입니다", a: "A", b: "B", labels: ["항목 1", "항목 2", "항목 3", "항목 4"], as: Array(4).fill("이건 A의\n내용입니다"), bs: Array(4).fill("이건 B의\n내용입니다") },
     build(f, ctx) {
       const c = canvas(ctx);
       c.text("title", "title", S(f.title), 80, 110, 920, 130, { ...H1, size: 66 });
@@ -462,14 +449,14 @@ const INNERS: LayoutDef[] = [
   {
     id: "pros-cons",
     kind: "inner",
-    name: "좋은 점·아쉬운 점",
-    desc: "위 사진, 좋은 점 세 줄, 아쉬운 점 세 줄",
+    name: "장단점",
+    desc: "위 사진, 좋은 점·아쉬운 점 각 세 줄",
     photo: true,
     fields: [
       { key: "goods", desc: "좋은 점 한 줄", max: 26, count: 3 },
       { key: "bads", desc: "아쉬운 점 한 줄", max: 26, count: 3 },
     ],
-    sample: { goods: Array(3).fill("좋은 점을 한 줄로 적습니다"), bads: Array(3).fill("아쉬운 점을 한 줄로 적습니다") },
+    sample: { goods: Array(3).fill("이건 좋은 점입니다"), bads: Array(3).fill("이건 아쉬운 점입니다") },
     build(f, ctx) {
       const c = canvas(ctx);
       c.chip(undefined, "좋은 점", 80, 580, 200, 64, CHIP.green, { align: "center", size: 30 });
@@ -482,8 +469,8 @@ const INNERS: LayoutDef[] = [
   {
     id: "timeline",
     kind: "inner",
-    name: "하루 일정표",
-    desc: "시간 + 할 일 + 짧은 설명이 세로 선으로 이어짐",
+    name: "타임라인",
+    desc: "시간 순서로 이어지는 다섯 단계",
     photo: false,
     fields: [
       { key: "title", desc: "일정 제목 한 줄 (예: '성수동 하루 코스')", max: 18 },
@@ -492,10 +479,7 @@ const INNERS: LayoutDef[] = [
       { key: "places", desc: "할 일이나 장소", max: 18, count: 5 },
       { key: "descs", desc: "짧은 설명 한 줄", max: 28, count: 5 },
     ],
-    sample: {
-      title: "하루 코스 제목", tag: "#코스 #하루", times: ["오전 9시", "오전 11시", "오후 1시", "오후 4시", "저녁 7시"],
-      places: Array(5).fill("할 일이나 장소"), descs: Array(5).fill("짧은 설명을 한 줄로 적습니다."),
-    },
+    sample: { title: "이건 타임라인 템플릿입니다", tag: "#태그", times: ["STEP 1", "STEP 2", "STEP 3", "STEP 4", "STEP 5"], places: Array(5).fill("이건 단계 이름입니다"), descs: Array(5).fill("이건 짧은 설명입니다.") },
     build(f, ctx) {
       const c = canvas(ctx);
       c.text("title", "title", S(f.title), 80, 100, 920, 110, { ...H1, size: 72 });
@@ -514,14 +498,14 @@ const INNERS: LayoutDef[] = [
   {
     id: "qa",
     kind: "inner",
-    name: "질문 띠 Q&A",
-    desc: "색 띠 질문 세 개와 그 답",
+    name: "Q&A",
+    desc: "색 띠 질문 세 개와 답",
     photo: false,
     fields: [
       { key: "qs", desc: "질문 한 줄 (Q 번호 없이)", max: 22, count: 3 },
       { key: "as", desc: "답 2~3줄 분량의 문장", max: 80, count: 3 },
     ],
-    sample: { qs: Array(3).fill("질문을 적습니다"), as: Array(3).fill("답변을 적습니다. 두세 줄 정도로 편하게 풀어서 적으면 읽기 좋습니다.") },
+    sample: { qs: Array(3).fill("이건 질문입니다"), as: Array(3).fill("이건 답입니다. 두세 줄 정도 들어가는 자리예요.") },
     build(f, ctx) {
       const c = canvas(ctx);
       const qs = L(f.qs, 3), as = L(f.as, 3);
@@ -539,8 +523,8 @@ const INNERS: LayoutDef[] = [
   {
     id: "person",
     kind: "inner",
-    name: "인물 소개표",
-    desc: "왼쪽 인물 사진, 이름·태그·소개, 아래 항목 네 줄",
+    name: "인물 프로필",
+    desc: "왼쪽 사진, 이름·태그·소개와 항목 네 줄",
     photo: true,
     fields: [
       { key: "name", desc: "이름 (2줄 가능, \\n)", max: 14 },
@@ -549,10 +533,7 @@ const INNERS: LayoutDef[] = [
       { key: "labels", desc: "항목 이름 (예: 하는 일·좋아하는 것·한마디)", max: 6, count: 4 },
       { key: "contents", desc: "항목 내용 한 줄", max: 26, count: 4 },
     ],
-    sample: {
-      name: "이름을\n적습니다", tag: "#직업 #소개", intro: "한 사람을 소개하는 글을 세 줄 안쪽으로 적습니다. 어떤 일을 하는지 적어요.",
-      labels: ["하는 일", "좋아하는 것", "한마디", "연락처"], contents: Array(4).fill("내용을 한두 줄로 적습니다."),
-    },
+    sample: { name: "이건 인물\n프로필입니다", tag: "#태그", intro: "이건 인물 소개 글입니다. 세 줄 정도 들어가요.", labels: ["항목 1", "항목 2", "항목 3", "항목 4"], contents: Array(4).fill("이건 내용입니다.") },
     build(f, ctx) {
       const c = canvas(ctx);
       c.text("name", "title", S(f.name), 540, 100, 460, 210, { ...H1, size: 66 });
@@ -570,8 +551,8 @@ const INNERS: LayoutDef[] = [
   {
     id: "product",
     kind: "inner",
-    name: "제품 정보표",
-    desc: "위 제품 사진, 이름 띠, 가격·구매처·추천, 검정 한 줄 평",
+    name: "제품 카드",
+    desc: "제품 사진, 이름 띠, 정보 세 줄, 한 줄 평",
     photo: true,
     fields: [
       { key: "name", desc: "제품 이름 한 줄", max: 20 },
@@ -579,10 +560,7 @@ const INNERS: LayoutDef[] = [
       { key: "contents", desc: "항목 내용 한 줄 (모르는 가격은 지어내지 말 것)", max: 26, count: 3 },
       { key: "quote", desc: "한 줄 평. 1~2줄(\\n)", max: 44 },
     ],
-    sample: {
-      name: "제품 이름을 적습니다", labels: ["가격", "구매처", "추천"], contents: Array(3).fill("내용을 한 줄로 적습니다."),
-      quote: "한 줄 평을 이 자리에 적습니다.\n두 줄까지 넣을 수 있어요.",
-    },
+    sample: { name: "이건 제품 카드입니다", labels: ["항목 1", "항목 2", "항목 3"], contents: Array(3).fill("이건 내용입니다."), quote: "이건 한 줄 평입니다.\n두 줄까지 들어가요." },
     build(f, ctx) {
       const c = canvas(ctx);
       c.chip("name", S(f.name), 80, 650, 640, 82, CHIP.pink, { size: 38 });
@@ -601,16 +579,14 @@ const INNERS: LayoutDef[] = [
   {
     id: "photo-sub-body",
     kind: "inner",
-    name: "사진 + 소제목 + 본문",
-    desc: "위 사진, 아래 굵은 소제목과 본문 문단",
+    name: "사진 위 · 글 아래",
+    desc: "위에 사진, 아래 소제목과 본문",
     photo: true,
     fields: [
       { key: "subtitle", desc: "소제목 한 줄", max: 20 },
       { key: "body", desc: "본문 2문단(문단 사이 빈 줄 \\n\\n), 4~6줄 분량", max: 160 },
     ],
-    sample: {
-      subtitle: "소제목을 넣는 자리", body: "이 부분에는 본문 문단을 적습니다. 위쪽 사진 칸에는 내용과 어울리는 사진을 넣어 주세요.\n\n문단 사이는 한 줄을 띄우면 읽기 편합니다.",
-    },
+    sample: { subtitle: "이건 내지입니다", body: "이건 본문입니다. 위에는 사진이, 여기에는 글이 들어가요.\n\n문단을 나눠 쓸 수 있어요." },
     build(f, ctx) {
       const c = canvas(ctx);
       c.text("subtitle", "subtitle", S(f.subtitle), 80, 690, 920, 90, { weight: 800, size: 56, lineHeight: 1.25 });
@@ -621,18 +597,15 @@ const INNERS: LayoutDef[] = [
   {
     id: "numbering",
     kind: "inner",
-    name: "넘버링",
-    desc: "색 번호 소제목 + 설명 (팁·방법을 하나씩)",
+    name: "번호 소제목",
+    desc: "포인트 색 번호 소제목 + 설명",
     photo: false,
     fields: [
       { key: "num", desc: "번호 (이 장의 순서, 숫자만)", max: 2 },
       { key: "heading", desc: "소제목 한 줄", max: 18 },
       { key: "body", desc: "설명 문단 3~6줄 분량", max: 170 },
     ],
-    sample: {
-      num: "1", heading: "번호와 소제목을 넣는 자리",
-      body: "이 부분에는 소제목에 대한 설명을 적습니다. 번호를 매긴 팁이나 방법을 하나씩 소개할 때 쓰는 양식입니다.",
-    },
+    sample: { num: "1", heading: "이건 번호 소제목입니다", body: "이건 설명 글입니다. 팁이나 방법을 하나씩 소개할 때 써요." },
     build(f, ctx) {
       const c = canvas(ctx);
       c.text("heading", "title", [`${S(f.num) || "1"}. `, S(f.heading), ""], 80, 150, 920, 180, { ...H1, size: 64, color: ctx.accent });
@@ -643,15 +616,15 @@ const INNERS: LayoutDef[] = [
   {
     id: "numbering-dark",
     kind: "inner",
-    name: "본문 넘버링 (어두운)",
-    desc: "사진 위 어두운 바탕, 번호 소제목 + 설명",
+    name: "번호 소제목 (어두운)",
+    desc: "사진 위 어두운 바탕에 번호 소제목 + 설명",
     photo: true,
     fields: [
       { key: "num", desc: "번호 (숫자만)", max: 2 },
       { key: "heading", desc: "소제목 한 줄", max: 18 },
       { key: "body", desc: "설명 3~4줄 분량", max: 110 },
     ],
-    sample: { num: "1", heading: "번호와 소제목을 넣는 자리", body: "이 부분에는 소제목에 대한 설명을 적습니다. 어두운 바탕 위에 밝은 글씨로 들어가며, 서너 줄 정도가 가장 보기 좋습니다." },
+    sample: { num: "1", heading: "이건 번호 소제목입니다", body: "이건 설명 글입니다. 사진 위에 밝은 글씨로 들어가요." },
     build(f, ctx) {
       const c = canvas(ctx);
       c.box(0, 0, 1080, 1350, { fill: SHADE_TOP });
@@ -663,11 +636,11 @@ const INNERS: LayoutDef[] = [
   {
     id: "quote-page",
     kind: "inner",
-    name: "한 장 글",
-    desc: "검정 바탕 가운데 글 한 편",
+    name: "가운데 글",
+    desc: "검정 바탕 가운데 정렬 글 한 편",
     photo: false,
     fields: [{ key: "text", desc: "한 편의 글. 2~3문단(빈 줄 \\n\\n로 구분), 문단마다 2줄", max: 160 }],
-    sample: { text: "“이 템플릿은 검정 바탕에\n글 한 편을 가운데 정렬로 담는 양식입니다.\n\n좋아하는 문장이나 짧은 글을\n이 자리에 넣어 주세요.”" },
+    sample: { text: "이건 내지입니다.\n\n가운데 정렬로\n글 한 편이 들어가요." },
     build(f, ctx) {
       const c = canvas(ctx);
       c.text("text", "body", S(f.text), 100, 260, 880, 830, { weight: 700, size: 44, color: "#ffffff", align: "center", vAlign: "middle", lineHeight: 1.6 });
@@ -677,17 +650,14 @@ const INNERS: LayoutDef[] = [
   {
     id: "essay",
     kind: "inner",
-    name: "본문",
-    desc: "첫 문장 강조 + 긴 본문 (한 장에 열 줄 안팎)",
+    name: "긴 글",
+    desc: "첫 문장 강조 + 긴 본문",
     photo: false,
     fields: [
       { key: "lead", desc: "글을 여는 첫 문장 (따옴표 없이)", max: 30 },
       { key: "body", desc: "긴 본문 2문단(\\n\\n), 8~10줄 분량", max: 260 },
     ],
-    sample: {
-      lead: "이 자리에는 글을 여는 첫 문장을 넣습니다.",
-      body: "이 템플릿은 긴 글을 담는 본문 양식입니다. 한 장에 열 줄 안팎이 들어갑니다.\n\n글이 길어지면 다음 장으로 이어 쓰면 됩니다.",
-    },
+    sample: { lead: "이건 첫 문장입니다", body: "이건 긴 글 템플릿입니다. 한 장에 열 줄 안팎이 들어가요.\n\n글이 길면 다음 장으로 이어 쓰면 돼요." },
     build(f, ctx) {
       const c = canvas(ctx);
       c.text("lead", "subtitle", ["“", S(f.lead), "”"], 80, 130, 920, 150, { weight: 800, size: 46, lineHeight: 1.4 });
@@ -698,8 +668,8 @@ const INNERS: LayoutDef[] = [
   {
     id: "item-intro",
     kind: "inner",
-    name: "아이템 소개",
-    desc: "번호 + 제품 이름, 가운데 사진, 한 줄 설명",
+    name: "아이템 쇼케이스",
+    desc: "번호 + 이름, 가운데 사진, 한 줄 설명",
     photo: true,
     fields: [
       { key: "num", desc: "번호 두 자리 (예: '01')", max: 3 },
@@ -707,7 +677,7 @@ const INNERS: LayoutDef[] = [
       { key: "quote", desc: "한 줄 설명 (따옴표 없이)", max: 22 },
       { key: "desc", desc: "소개 3~4줄 분량", max: 80 },
     ],
-    sample: { num: "01", name: "제품 이름", quote: "이 자리에 한 줄 설명을 넣습니다", desc: "이 부분에는 제품 소개를 적습니다. 너무 길지 않게 서너 줄 정도가 가장 보기 좋습니다." },
+    sample: { num: "01", name: "아이템 이름", quote: "이건 한 줄 설명입니다", desc: "이건 아이템 소개 글입니다. 서너 줄 정도 들어가요." },
     build(f, ctx) {
       const c = canvas(ctx);
       c.text("num", "number", ["", S(f.num) || "01", "."], 80, 100, 920, 90, { weight: 800, size: 72, color: "#ffffff", align: "center", lineHeight: 1.1 });
@@ -720,14 +690,14 @@ const INNERS: LayoutDef[] = [
   {
     id: "reasons",
     kind: "inner",
-    name: "띠 + 큰 사진 + 이유",
-    desc: "질문형 제목 띠, 큰 사진, 이유 세 줄",
+    name: "이유 세 가지",
+    desc: "제목 띠, 큰 사진, 이유 세 줄",
     photo: true,
     fields: [
       { key: "title", desc: "질문형 제목 한 줄 (예: '이걸 왜 샀을까?')", max: 18 },
       { key: "reasons", desc: "이유 한 줄", max: 28, count: 3 },
     ],
-    sample: { title: "이걸 왜 샀을까?", reasons: ["첫 번째 이유를 한 줄로 적습니다.", "두 번째 이유를 한 줄로 적습니다.", "세 번째 이유를 한 줄로 적습니다."] },
+    sample: { title: "이건 이유 템플릿입니다", reasons: ["이건 첫 번째 이유입니다.", "이건 두 번째 이유입니다.", "이건 세 번째 이유입니다."] },
     build(f, ctx) {
       const c = canvas(ctx);
       c.chip("title", S(f.title), 80, 90, 640, 92, CHIP.blue, { size: 44 });
@@ -742,7 +712,7 @@ const INNERS: LayoutDef[] = [
   {
     id: "dark-card",
     kind: "inner",
-    name: "어두운 번호 카드",
+    name: "하단 블랙 카드",
     desc: "위 사진, 아래 검정 칸에 번호·제목·설명",
     photo: true,
     fields: [
@@ -750,7 +720,7 @@ const INNERS: LayoutDef[] = [
       { key: "title", desc: "한 줄 제목", max: 18 },
       { key: "desc", desc: "설명 2~3줄 분량", max: 70 },
     ],
-    sample: { num: "1", title: "한 줄 제목을 넣는 자리", desc: "이 부분에는 설명을 두세 줄 적습니다. 위쪽 칸에는 사진을 넣어 주세요." },
+    sample: { num: "1", title: "이건 내지입니다", desc: "이건 설명 글입니다. 두세 줄 정도 들어가요." },
     build(f, ctx) {
       const c = canvas(ctx);
       c.box(0, 800, 1080, 550, { fill: "#000000" });
@@ -766,15 +736,15 @@ const INNERS: LayoutDef[] = [
   {
     id: "place",
     kind: "inner",
-    name: "공간 소개",
-    desc: "사진 위 장소 이름, 가는 길, 공간 소개",
+    name: "장소 소개",
+    desc: "사진 위 장소 이름, 위치, 소개",
     photo: true,
     fields: [
       { key: "name", desc: "장소·공간 이름", max: 16 },
       { key: "way", desc: "가는 길이나 위치 한 줄 (모르면 분위기 한 줄)", max: 24 },
       { key: "intro", desc: "공간 소개 3~4줄 분량 (분위기·추천·좋은 시간)", max: 90 },
     ],
-    sample: { name: "장소 이름을 넣는 자리", way: "가는 길을 한 줄로 적습니다", intro: "이 부분에는 공간에 대한 소개를 적습니다. 분위기, 추천 메뉴, 가기 좋은 시간처럼 가는 사람에게 도움이 되는 내용을 넣어 주세요." },
+    sample: { name: "이건 장소 이름입니다", way: "이건 위치 한 줄입니다", intro: "이건 장소 소개 글입니다. 분위기나 추천할 점을 적어요." },
     build(f, ctx) {
       const c = canvas(ctx);
       c.box(0, 0, 1080, 1350, { fill: "linear-gradient(180deg, rgba(0,0,0,0) 30%, rgba(0,0,0,0.7) 60%, rgba(0,0,0,0.92) 100%)" });
@@ -788,15 +758,15 @@ const INNERS: LayoutDef[] = [
   {
     id: "book-music",
     kind: "inner",
-    name: "음악·도서 소개",
-    desc: "한 줄 문장, 가운데 표지 사진, 인용구와 출처",
+    name: "책·음악 추천",
+    desc: "한 줄 문장, 가운데 표지 사진, 한 구절과 출처",
     photo: true,
     fields: [
       { key: "line", desc: "소개하는 것에 대한 한 줄 문장. 2줄(\\n)", max: 36 },
       { key: "quote", desc: "속 한 구절이나 핵심 문장. 2줄(\\n), 따옴표 없이", max: 36 },
       { key: "credit", desc: "만든 사람 - 제목 (예: '저자 - 책 제목')", max: 26 },
     ],
-    sample: { line: "이 자리에는 곡이나 책에 대한 한 줄 문장을\n두 줄로 적습니다.", quote: "가사나 책 속 한 구절을\n이 자리에 넣습니다", credit: "가수 - 노래 제목 / 저자 - 책 제목" },
+    sample: { line: "이건 책·음악 추천\n템플릿입니다.", quote: "이건 인상 깊은\n한 구절입니다", credit: "만든 사람 - 제목" },
     build(f, ctx) {
       const c = canvas(ctx);
       c.text("line", "subtitle", S(f.line), 100, 150, 880, 120, { weight: 700, size: 36, align: "center", lineHeight: 1.45 });
@@ -812,14 +782,14 @@ const LASTS: LayoutDef[] = [
   {
     id: "last-ask3",
     kind: "last",
-    name: "부탁 세 가지 + 프로필",
-    desc: "번호 붙은 세 줄 부탁, 아래 프로필 한 줄",
+    name: "저장·공유·팔로우",
+    desc: "번호 붙은 부탁 세 줄과 프로필",
     photo: false,
     fields: [
       { key: "title", desc: "마무리 제목. 2줄(\\n), 한 줄 6~11자", max: 24 },
       { key: "asks", desc: "독자에게 부탁할 행동 한 줄 (저장·공유·팔로우·댓글 등)", max: 22, count: 3 },
     ],
-    sample: { title: "도움이 됐다면\n이렇게 해 주세요", asks: ["저장해 두고 필요할 때 꺼내 보기", "필요한 친구에게 공유하기", "팔로우하고 다음 글 받아 보기"] },
+    sample: { title: "이건\n마지막 장입니다", asks: ["저장해 두고 다시 보기", "친구에게 공유하기", "팔로우하고 새 글 받기"] },
     build(f, ctx) {
       const c = canvas(ctx);
       c.text("title", "title", S(f.title), 80, 130, 920, 220, { ...H1, size: 72, align: "center", vAlign: "middle" });
@@ -837,14 +807,14 @@ const LASTS: LayoutDef[] = [
   {
     id: "last-photo-glass",
     kind: "last",
-    name: "사진 + 반투명 카드",
-    desc: "배경 사진 위 큰 문구, 아래 반투명 프로필 카드",
+    name: "사진 + 글래스 카드",
+    desc: "사진 위 큰 문구와 반투명 프로필 카드",
     photo: true,
     fields: [
       { key: "text", desc: "큰 마무리 문구. 정확히 3줄(\\n), 한 줄 5~9자", max: 27 },
       { key: "guide", desc: "카드 위 한 줄 안내 (예: '더 많은 글은 프로필에서')", max: 22 },
     ],
-    sample: { text: "이 자리에\n원하는 문구를\n넣어 주세요", guide: "카드 위에 한 줄 안내를 넣습니다" },
+    sample: { text: "이건\n마지막 장\n입니다", guide: "이건 안내 한 줄입니다" },
     build(f, ctx) {
       const c = canvas(ctx);
       c.box(0, 0, 1080, 1350, { fill: "linear-gradient(180deg, rgba(0,0,0,0.65) 0%, rgba(0,0,0,0.2) 45%, rgba(0,0,0,0.85) 100%)" });
@@ -858,11 +828,11 @@ const LASTS: LayoutDef[] = [
   {
     id: "last-black-profile",
     kind: "last",
-    name: "검정 바탕 + 큰 프로필",
-    desc: "검정 바탕 위 문구, 가운데 큰 프로필과 팔로우 버튼",
+    name: "블랙 프로필",
+    desc: "검정 바탕, 가운데 큰 프로필과 팔로우",
     photo: false,
     fields: [{ key: "text", desc: "마무리 문구. 정확히 2줄(\\n), 한 줄 7~13자", max: 28 }],
-    sample: { text: "이 자리에 원하는 문구를\n두 줄로 넣어 주세요" },
+    sample: { text: "이건\n마지막 장입니다" },
     build(f, ctx) {
       const c = canvas(ctx);
       c.text("text", "title", S(f.text), 80, 200, 920, 220, { ...H1, size: 62, color: "#ffffff", align: "center", vAlign: "middle" });
@@ -878,11 +848,11 @@ const LASTS: LayoutDef[] = [
   {
     id: "last-photo-card",
     kind: "last",
-    name: "사진 + 흰 프로필 카드",
-    desc: "배경 사진 위 흰 프로필 카드와 문구 세 줄",
+    name: "사진 + 화이트 카드",
+    desc: "사진 위 흰 프로필 카드와 문구",
     photo: true,
     fields: [{ key: "text", desc: "마무리 문구. 정확히 3줄(\\n), 한 줄 5~10자", max: 30 }],
-    sample: { text: "이 자리에\n원하는 문구를\n넣어 주세요" },
+    sample: { text: "이건\n마지막 장\n입니다" },
     build(f, ctx) {
       const c = canvas(ctx);
       c.box(0, 0, 1080, 1350, { fill: "rgba(0,0,0,0.55)" });
@@ -895,14 +865,14 @@ const LASTS: LayoutDef[] = [
   {
     id: "last-black-text",
     kind: "last",
-    name: "검정 바탕 + 큰 문구",
-    desc: "왼쪽 큰 문구와 설명, 아래 프로필 카드",
+    name: "블랙 마무리 문구",
+    desc: "큰 문구와 설명, 아래 프로필 카드",
     photo: false,
     fields: [
       { key: "text", desc: "큰 마무리 문구. 정확히 3줄(\\n), 한 줄 4~8자", max: 24 },
       { key: "desc", desc: "짧은 설명 2줄(\\n)", max: 40 },
     ],
-    sample: { text: "이 자리에\n원하는 문구를\n넣어 주세요", desc: "그 아래에는 짧은 설명을\n두 줄 정도로 적습니다." },
+    sample: { text: "이건\n마지막 장\n입니다", desc: "이건 짧은 설명입니다." },
     build(f, ctx) {
       const c = canvas(ctx);
       c.text("text", "title", S(f.text), 80, 130, 920, 420, { ...H1, size: 100, color: "#ffffff", lineHeight: 1.2 });

@@ -2,7 +2,7 @@ import { DEFAULT_BOTTOM_CTA, DEFAULT_PINNED_COMMENT, DEFAULT_TOP_CTA } from "./c
 import { DEFAULT_DM_CTA } from "./dm";
 import { DEFAULT_BODY, DEFAULT_TITLE, ROLES, styleOf, type BlockStyle, type TextBlock, type TextRole } from "./layout";
 import type { FontNeed } from "./webfonts";
-import { AUTO, type LayoutSet } from "./magazine-client";
+import type { LayoutSet } from "./magazine-client";
 
 /**
  * 디자인 템플릿 — 글 상자의 모양(글꼴·굵기·크기·색·위치·정렬·자간·행간·글상자·테두리·그림자·강조색)을
@@ -49,7 +49,7 @@ export type Template = {
   pinnedComment: string;
   dm: DmStyle;
   /**
-   * 매거진 레이아웃 세트 — 있으면 장마다 표지·속지·마지막 장 양식으로 그리고 AI가 칸에 맞게 글을 나눠 쓴다.
+   * 조합 — 썸네일·내지·마지막 장 템플릿 묶음. 있으면 장마다 그 템플릿으로 그리고 AI가 칸에 맞게 글을 나눠 쓴다.
    * 없으면 예전처럼 표지 제목 상자 + 내지 본문 상자 (역할별 모양 styles 사용).
    */
   set?: LayoutSet;
@@ -89,7 +89,7 @@ const base = {
   dm: DEFAULT_DM,
 };
 
-const magazine = (id: string, name: string, set: LayoutSet): Template => ({
+const combo = (id: string, name: string, set: LayoutSet): Template => ({
   id,
   name,
   builtin: true,
@@ -101,10 +101,20 @@ const magazine = (id: string, name: string, set: LayoutSet): Template => ({
 
 export const BUILTIN_TEMPLATES: Template[] = [
   { id: "default", name: "기본 디자인", builtin: true, styles: { title: DEFAULT_TITLE, body: DEFAULT_BODY }, ...base },
-  magazine("mag-black", "매거진 블랙", { cover: "cover-photo-bottom", inner: AUTO, last: "last-photo-glass", accent: "#e5481c" }),
-  magazine("mag-note", "정보 정리 노트", { cover: "cover-book", inner: AUTO, last: "last-ask3", accent: "#0b4a8f" }),
-  magazine("mag-editorial", "사진 에디토리얼", { cover: "cover-photo-center", inner: AUTO, last: "last-photo-card", accent: "#2b6fff" }),
-  magazine("mag-color", "컬러 포인트", { cover: "cover-color-top", inner: AUTO, last: "last-black-profile", accent: "#2fb79a" }),
+  combo("set-black", "블랙 무드", { cover: "cover-photo-bottom", inners: [], last: "last-photo-glass", accent: "#e5481c" }),
+  combo("set-info", "정보 정리", {
+    cover: "cover-book",
+    inners: ["info-table", "numbered-list", "checklist", "ranking", "compare", "timeline", "qa", "numbering"],
+    last: "last-ask3",
+    accent: "#0b4a8f",
+  }),
+  combo("set-photo", "포토 스토리", {
+    cover: "cover-photo-center",
+    inners: ["photo-sub-body", "numbering-dark", "dark-card", "place", "item-intro", "reasons", "pros-cons"],
+    last: "last-photo-card",
+    accent: "#2b6fff",
+  }),
+  combo("set-color", "컬러 포인트", { cover: "cover-color-top", inners: [], last: "last-black-profile", accent: "#2fb79a" }),
 ];
 
 export const DEFAULT_TEMPLATE = BUILTIN_TEMPLATES[0];
@@ -263,7 +273,7 @@ function migrate(raw: Template): Template {
     caption: { ...DEFAULT_CAPTION, ...t.caption },
     pinnedComment: t.pinnedComment ?? DEFAULT_PINNED_COMMENT,
     dm: { ...DEFAULT_DM, ...t.dm },
-    ...(t.set ? { set: t.set } : {}),
+    ...(t.set ? { set: { ...t.set, inners: Array.isArray(t.set.inners) ? t.set.inners : [] } } : {}),
   };
 }
 
