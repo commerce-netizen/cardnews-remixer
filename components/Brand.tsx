@@ -24,10 +24,11 @@ export function BrushMark({ className }: { className?: string }) {
 
 export default function Brand() {
   return (
-    <Link href="/" className="brand" aria-label="돈작가 처음 화면">
+    <Link href="/" className="brand" aria-label="돈작가 사진 생성기 처음 화면">
       <BrushMark className="brand-brush" />
       <span className="brand-don">돈</span>
       <span className="brand-rest">작가</span>
+      <span className="brand-sub">사진 생성기</span>
     </Link>
   );
 }

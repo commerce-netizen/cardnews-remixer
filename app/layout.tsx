@@ -5,7 +5,7 @@ import Brand from "@/components/Brand";
 import ThemeToggle from "@/components/ThemeToggle";
 
 export const metadata: Metadata = {
-  title: "돈작가",
+  title: "돈작가 사진 생성기",
   description: "인스타그램 사진 게시물을 새 사진·새 글로 다시 만들어 드려요",
 };
 

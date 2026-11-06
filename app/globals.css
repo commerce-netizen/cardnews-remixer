@@ -25,6 +25,11 @@
   --brush-handle: #2a2f3a;
   --brush-ferrule: #b9c0cc;
   --brush-hair: #2a2f3a;
+  --logo-blue-side: #1f56d6;
+  --logo-blue-deep: #16409e;
+  --logo-ink-side: #a3acbb;
+  --logo-ink-deep: #7d8697;
+  --logo-drop: rgba(16, 24, 40, 0.22);
   color-scheme: light;
 }
 
@@ -54,6 +59,11 @@
   --brush-handle: #d9dee8;
   --brush-ferrule: #8a93a3;
   --brush-hair: #d9dee8;
+  --logo-blue-side: #2659c9;
+  --logo-blue-deep: #173d8f;
+  --logo-ink-side: #7d8697;
+  --logo-ink-deep: #4b5363;
+  --logo-drop: rgba(0, 0, 0, 0.55);
   color-scheme: dark;
 }
 
@@ -83,6 +93,11 @@
     --brush-handle: #d9dee8;
     --brush-ferrule: #8a93a3;
     --brush-hair: #d9dee8;
+    --logo-blue-side: #2659c9;
+    --logo-blue-deep: #173d8f;
+    --logo-ink-side: #7d8697;
+    --logo-ink-deep: #4b5363;
+    --logo-drop: rgba(0, 0, 0, 0.55);
     color-scheme: dark;
   }
 }
@@ -711,8 +726,27 @@ input[type="range"] { width: 100%; height: 32px; accent-color: var(--primary); }
   text-decoration: none;
   padding: 4px 6px 2px 0;
 }
-.brand-don { color: var(--primary); }
-.brand-rest { color: var(--text); }
+/* 입체감: 아래·오른쪽으로 한 겹씩 짙은 색을 쌓아 두께를 만들고, 맨 아래 부드러운 그림자 */
+.brand-don {
+  color: var(--primary);
+  text-shadow: 1px 1px 0 var(--logo-blue-side), 2px 2px 0 var(--logo-blue-side), 3px 3px 0 var(--logo-blue-deep),
+    4px 5px 6px var(--logo-drop);
+}
+.brand-rest {
+  color: var(--text);
+  text-shadow: 1px 1px 0 var(--logo-ink-side), 2px 2px 0 var(--logo-ink-side), 3px 3px 0 var(--logo-ink-deep),
+    4px 5px 6px var(--logo-drop);
+}
+.brand-sub {
+  margin-left: 10px;
+  padding-bottom: 3px;
+  font-family: var(--font-pretendard), sans-serif;
+  font-weight: 800;
+  font-size: 17px;
+  letter-spacing: -0.02em;
+  color: var(--muted);
+  white-space: nowrap;
+}
 /* 붓: '돈' 왼쪽에서 글자를 쓰는 모양 */
 .brand-brush {
   width: 36px; height: 44px;
@@ -736,5 +770,6 @@ input[type="range"] { width: 100%; height: 32px; accent-color: var(--primary); }
 @media (max-width: 640px) {
   .site-header-inner { padding: 8px 16px; }
   .brand { font-size: 28px; }
+  .brand-sub { font-size: 14px; margin-left: 7px; padding-bottom: 2px; }
   .brand-brush { width: 31px; height: 38px; margin: 0 -4px -1px -7px; }
 }
