@@ -101,6 +101,9 @@ const builtinCombo = (id: string, name: string, combo: Combo): Template => ({
 
 export const BUILTIN_TEMPLATES: Template[] = [
   { id: "default", name: "기본 디자인", builtin: true, styles: { title: DEFAULT_TITLE, body: DEFAULT_BODY }, ...base },
+  builtinCombo("set-classic", "기본 텍스트 박스", {
+    cover: { layout: "cover-classic", shade: true }, inner: { layout: "inner-textbox" }, last: { layout: "last-black-profile" }, accent: "#e5481c",
+  }),
   builtinCombo("set-black", "블랙 무드", {
     cover: { layout: "cover-photo-bottom" }, inner: { layout: "photo-sub-body" }, last: { layout: "last-black-profile" }, accent: "#e5481c",
   }),

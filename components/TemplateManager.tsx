@@ -340,6 +340,14 @@ export default function TemplateManager({ onClose, onPick }: Props) {
             {spec && (
               <section className="card stack">
                 <h2 style={{ margin: 0 }}>{KIND_LABEL[step]} 고치기</h2>
+                {sample && sample.photo === undefined && (
+                  <Toggle
+                    label="아래쪽 그라데이션"
+                    hint="사진 아래를 어둡게 깔아서 글씨가 잘 보이게 해요"
+                    checked={sample.shapes?.some((x) => x.tag === "shade") ?? false}
+                    onChange={(shade) => patchSpec({ shade })}
+                  />
+                )}
                 <ColorField label="바탕색" value={spec.bg || ""} presets={BG_COLORS} onChange={(bg) => patchSpec({ bg })} />
                 {step === "last" && def && (
                   <div className="stack">
@@ -397,8 +405,8 @@ export default function TemplateManager({ onClose, onPick }: Props) {
                     )}
                   </>
                 )}
-                {(spec.bg || spec.styles) && (
-                  <button className="btn btn-secondary" onClick={() => patchSpec({ bg: undefined, styles: undefined })}>
+                {(spec.bg || spec.styles || spec.shade !== undefined) && (
+                  <button className="btn btn-secondary" onClick={() => patchSpec({ bg: undefined, styles: undefined, shade: undefined })}>
                     이 장 전체를 처음 모양으로
                   </button>
                 )}
