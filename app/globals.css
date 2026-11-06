@@ -80,6 +80,9 @@
     --info-text: #a9c4ff;
     --info-line: #26375c;
     --danger-line: #4a2224;
+    --brush-handle: #d9dee8;
+    --brush-ferrule: #8a93a3;
+    --brush-hair: #d9dee8;
     color-scheme: dark;
   }
 }
@@ -701,19 +704,20 @@ input[type="range"] { width: 100%; height: 32px; accent-color: var(--primary); }
 }
 .brand {
   display: inline-flex; align-items: flex-end;
-  font-family: var(--font-jua), var(--font-pretendard), sans-serif;
-  font-size: 32px; line-height: 1;
-  letter-spacing: 0;
+  font-family: var(--font-logo), var(--font-pretendard), sans-serif;
+  font-weight: 400;
+  font-size: 34px; line-height: 1;
+  letter-spacing: -0.01em;
   text-decoration: none;
-  padding: 16px 6px 2px 0;
+  padding: 4px 6px 2px 0;
 }
-.brand-don { position: relative; color: var(--primary); }
+.brand-don { color: var(--primary); }
 .brand-rest { color: var(--text); }
-/* 붓: '돈' 위에 비스듬히 — 모자 자리 */
+/* 붓: '돈' 왼쪽에서 글자를 쓰는 모양 */
 .brand-brush {
-  position: absolute;
-  width: 30px; height: 30px;
-  top: -21px; left: 2px;
+  width: 36px; height: 44px;
+  margin: 0 -5px -1px -8px;
+  flex: none;
   filter: drop-shadow(0 1px 0 rgba(0, 0, 0, 0.12));
 }
 .theme-toggle {
@@ -732,5 +736,5 @@ input[type="range"] { width: 100%; height: 32px; accent-color: var(--primary); }
 @media (max-width: 640px) {
   .site-header-inner { padding: 8px 16px; }
   .brand { font-size: 28px; }
-  .brand-brush { width: 26px; height: 26px; top: -18px; left: 2px; }
+  .brand-brush { width: 31px; height: 38px; margin: 0 -4px -1px -7px; }
 }

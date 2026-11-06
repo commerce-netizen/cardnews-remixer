@@ -2,12 +2,13 @@ import Link from "next/link";
 
 /**
  * 프로그램 이름 '돈작가' 로고.
- * '돈'은 사이트 메인 블루, 그 위에 비스듬히 얹힌 붓(작가의 상징). '작가'는 본문 글자색이라 다크 모드에서도 보인다.
+ * 붓(작가의 상징)이 '돈' 왼쪽에서 글자를 쓰는 모양. '돈'은 사이트 메인 블루, '작가'는 본문 글자색(다크 모드 대응).
+ * 글꼴은 아주 굵고 각진 Black Han Sans.
  */
 export function BrushMark({ className }: { className?: string }) {
   return (
     <svg className={className} viewBox="0 0 48 48" aria-hidden="true">
-      <g transform="rotate(42 24 24)">
+      <g transform="rotate(-28 24 24)">
         {/* 손잡이 */}
         <rect x="18.5" y="0.5" width="11" height="24" rx="5.5" fill="var(--brush-handle)" />
         <rect x="21" y="3" width="2.4" height="18" rx="1.2" fill="#ffffff" opacity="0.3" />
@@ -24,10 +25,8 @@ export function BrushMark({ className }: { className?: string }) {
 export default function Brand() {
   return (
     <Link href="/" className="brand" aria-label="돈작가 처음 화면">
-      <span className="brand-don">
-        돈
-        <BrushMark className="brand-brush" />
-      </span>
+      <BrushMark className="brand-brush" />
+      <span className="brand-don">돈</span>
       <span className="brand-rest">작가</span>
     </Link>
   );

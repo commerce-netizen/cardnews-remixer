@@ -1,6 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
-import { jua, pretendard } from "@/lib/fonts";
+import { jua, logoFont, pretendard } from "@/lib/fonts";
 import Brand from "@/components/Brand";
 import ThemeToggle from "@/components/ThemeToggle";
 
@@ -23,7 +23,7 @@ const THEME_SCRIPT = `try{var t=localStorage.getItem("theme");if(t==="light"||t=
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="ko" className={`${pretendard.variable} ${jua.variable}`} suppressHydrationWarning>
+    <html lang="ko" className={`${pretendard.variable} ${jua.variable} ${logoFont.variable}`} suppressHydrationWarning>
       <head>
         <script dangerouslySetInnerHTML={{ __html: THEME_SCRIPT }} />
       </head>
