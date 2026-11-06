@@ -219,16 +219,58 @@ export default function Editor({ recipe, commerce, slides, captionBody, dmConten
     }
   };
 
+  /**
+   * 휴대폰: 화면을 보는 동안 완성 사진을 미리 만들어 둔다.
+   * 그래야 '내려받기'를 누른 그 순간 바로 저장(아이폰은 저장 창)이 열린다 — 누른 뒤 사진을 만들면
+   * 아이폰은 '누른 순간'이 지나 저장 창을 못 연다.
+   */
+  const pre = useRef<{ version: number; blobs: Blob[] | null }>({ version: 0, blobs: null });
+  useEffect(() => {
+    if (device === "desktop") return;
+    const v = ++pre.current.version;
+    pre.current.blobs = null;
+    const t = setTimeout(async () => {
+      try {
+        await loadFonts(JSON.parse(fontKey));
+        const els = nodes.current.slice(0, slides.length).filter((n): n is HTMLDivElement => !!n);
+        if (els.length !== slides.length || genIndex !== null) return;
+        const blobs = await renderSlides(els);
+        if (pre.current.version === v) pre.current.blobs = blobs;
+      } catch {
+        /* 미리 못 만들면 누를 때 만든다 */
+      }
+    }, 1200);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [slides, watermark, adLabel, genIndex, fontKey]);
+
+  const showResults = (blobs: Blob[]) => {
+    resultBlobs.current = blobs;
+    setResults(blobs.map((b) => URL.createObjectURL(b)));
+  };
+
   const approve = async () => {
     setSaved(false);
     setError(null);
+    // 휴대폰 + 미리 만들어 둔 사진이 있으면: 기다림 없이 바로 사진 앱·갤러리로
+    const ready = device !== "desktop" ? pre.current.blobs : null;
+    if (ready) {
+      showResults(ready);
+      try {
+        const r = await saveToGallery(ready);
+        if (r !== "cancelled") setSaved(true);
+      } catch {
+        setError("사진 저장 창을 열지 못했어요. 아래 초록 버튼을 다시 눌러 주세요.");
+      }
+      setTimeout(() => document.getElementById("result-card")?.scrollIntoView({ behavior: "smooth", block: "start" }), 100);
+      return;
+    }
     setBusy(`완성본 만드는 중… (0 / ${slides.length}장)`);
     try {
       await loadFonts(JSON.parse(fontKey));
       const els = nodes.current.slice(0, slides.length).filter((n): n is HTMLDivElement => !!n);
       const blobs = await renderSlides(els, (d) => setBusy(`완성본 만드는 중… (${d} / ${slides.length}장)`));
-      resultBlobs.current = blobs;
-      setResults(blobs.map((b) => URL.createObjectURL(b)));
+      showResults(blobs);
       if (device === "desktop") {
         await downloadZip(blobs, caption, pinned, dm);
       } else if (device === "android") {
@@ -236,7 +278,7 @@ export default function Editor({ recipe, commerce, slides, captionBody, dmConten
         await saveToGallery(blobs);
         setSaved(true);
       }
-      // 아이폰: 사진 만드는 사이 '누른 순간'이 지나 공유 창을 바로 못 연다 → 아래 '사진 앱에 저장' 버튼을 한 번 더 누르게
+      // 아이폰에서 아직 미리 못 만들었을 때만: 아래 '사진 앱에 저장' 버튼을 한 번 더
       setTimeout(() => document.getElementById("result-card")?.scrollIntoView({ behavior: "smooth", block: "start" }), 100);
     } catch (e) {
       console.error(e);
@@ -447,7 +489,7 @@ export default function Editor({ recipe, commerce, slides, captionBody, dmConten
       <div className="approve-bar">
         <div className="inner">
           <button className="btn btn-ok btn-huge" onClick={approve} disabled={!!busy || genIndex !== null}>
-            {busy ?? "✅ 승인하고 내려받기"}
+            {busy ?? (device === "desktop" ? "✅ 승인하고 내려받기" : device === "ios" ? "✅ 사진 앱에 저장하기" : "✅ 갤러리에 저장하기")}
           </button>
         </div>
       </div>
