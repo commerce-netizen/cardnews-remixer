@@ -36,7 +36,7 @@ export default function HotBoard() {
   const router = useRouter();
   const [data, setData] = useState<HotData | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [period, setPeriod] = useState<HotPeriod>("week");
+  const [period, setPeriod] = useState<HotPeriod>("day");
   const [sort, setSort] = useState<HotSort>("likes");
   const [account, setAccount] = useState<string>("all");
 
