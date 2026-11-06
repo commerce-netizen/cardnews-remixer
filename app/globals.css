@@ -886,3 +886,20 @@ input[type="range"] { width: 100%; height: 32px; accent-color: var(--primary); }
 .page-head { display: flex; align-items: center; gap: 8px; min-height: 38px; }
 .page-head .fav-btn { position: static; flex: none; box-shadow: none; width: 34px; height: 34px; }
 .page-head .page-name { margin: 0; line-height: 1.3; }
+
+/* ── 내 템플릿 만들기: 세 장 한눈에 ───────────────────── */
+.combo-strip { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; max-width: 640px; }
+.combo-step {
+  display: flex; flex-direction: column; gap: 6px; text-align: left;
+  font: inherit; color: var(--text); cursor: pointer;
+  background: var(--surface); border: 2px solid var(--line); border-radius: var(--radius-sm); padding: 8px;
+}
+.combo-step.on { border-color: var(--primary); box-shadow: var(--ring); }
+.combo-step-label { font-weight: 800; font-size: 0.9rem; color: var(--primary); }
+.combo-step-name { font-size: 0.8rem; color: var(--muted); line-height: 1.3; }
+.combo-step .layout-auto, .tpl-shots-3 .layout-auto { aspect-ratio: 4 / 5; }
+.tpl-shots-3 { grid-template-columns: repeat(3, 1fr) !important; }
+.tpl-shots-3 figure { margin: 0; display: flex; flex-direction: column; gap: 6px; }
+.tpl-shots-3 figcaption { font-size: 0.8rem; color: var(--muted); text-align: center; }
+.layout-pick .fav-btn { top: 12px; left: 12px; width: 32px; height: 32px; }
+.layout-pick .fav-btn svg { width: 17px; height: 17px; }

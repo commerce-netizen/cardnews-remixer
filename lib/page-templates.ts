@@ -1,55 +1,39 @@
 /**
- * 장 템플릿 — 썸네일·내지·마지막 장을 하나씩 따로 쓰는 템플릿.
+ * 템플릿 조합 = 썸네일 1 + 내지 1 + 마지막 장 1.
  *
- * 기본 제공 = 양식(lib/magazine.ts) 하나당 하나. 사용자는 기본 제공을 복제해
- * 바탕색·포인트 색·글 상자별 모양(글꼴·크기·색·위치·글상자)을 마음껏 고쳐 '내 템플릿'으로 저장한다.
- * 조합(lib/templates.ts의 set)은 이 장 템플릿들을 골라 묶은 것.
+ * 장 하나(PageSpec) = 바탕이 되는 양식(lib/magazine.ts) + 내가 고친 것(바탕색·글 상자별 글꼴/크기/색/위치).
+ * 마지막 장은 AI가 쓰지 않고, 템플릿에 적어 둔 글(fields) 그대로 나온다.
  */
 import { slideHeight, type BlockStyle } from "./layout";
-import { DEFAULT_ACCENT, LAYOUTS, getLayout, type Fields, type LayoutKind } from "./magazine";
+import { DEFAULT_ACCENT, getLayout, type Fields, type LayoutKind } from "./magazine";
 import type { Slide } from "./types";
 
-export type PageTemplate = {
-  id: string;
-  name: string;
-  kind: LayoutKind;
+export type PageSpec = {
   /** 바탕이 되는 양식 id */
   layout: string;
-  builtin?: boolean;
-  /** 포인트 색 (없으면 조합의 포인트 색) */
-  accent?: string;
   /** 바탕색 (없으면 양식 기본) */
   bg?: string;
   /** 글 상자 이름표(slot)별로 고친 모양 */
   styles?: Record<string, Partial<BlockStyle>>;
+  /** 마지막 장: 늘 이대로 나오는 글 (없으면 양식 보기글) */
+  fields?: Fields;
 };
 
-export const BUILTIN_PAGES: PageTemplate[] = LAYOUTS.map((l) => ({ id: l.id, name: l.name, kind: l.kind, layout: l.id, builtin: true }));
+export type Combo = {
+  cover: PageSpec;
+  inner: PageSpec;
+  /** 없으면 마지막 장을 붙이지 않는다 */
+  last: PageSpec | null;
+  /** 포인트 색 (띠·번호·강조) — 세 장 공통 */
+  accent: string;
+};
 
-const KEY = "cardnews.pages.v1";
-
-export function loadUserPages(): PageTemplate[] {
-  try {
-    const list = JSON.parse(localStorage.getItem(KEY) || "[]");
-    return Array.isArray(list) ? list.filter((p) => p && typeof p.id === "string" && getLayout(p.layout)) : [];
-  } catch {
-    return [];
-  }
-}
-
-export function saveUserPages(list: PageTemplate[]): void {
-  try {
-    localStorage.setItem(KEY, JSON.stringify(list.filter((p) => !p.builtin)));
-  } catch {}
-}
-
-export function allPages(): PageTemplate[] {
-  return [...loadUserPages(), ...BUILTIN_PAGES];
-}
-
-export function findPage(id: string | undefined, list: PageTemplate[] = allPages()): PageTemplate | undefined {
-  return id ? list.find((p) => p.id === id) : undefined;
-}
+export const DEFAULT_COMBO: Combo = {
+  cover: { layout: "cover-photo-bottom" },
+  inner: { layout: "photo-sub-body" },
+  last: { layout: "last-ask3" },
+  accent: DEFAULT_ACCENT,
+};
 
 type Look = { accent: string; handle: string };
 
@@ -75,32 +59,29 @@ function isDark(hex: string): boolean {
   return (0.299 * ((n >> 16) & 255) + 0.587 * ((n >> 8) & 255) + 0.114 * (n & 255)) / 255 < 0.5;
 }
 
-/** 장 템플릿 + 칸 값으로 슬라이드를 그린다 (사진·원본 글은 그대로) */
-export function applyPage(slide: Slide, page: PageTemplate, fields: Fields, look: Look): Slide {
-  const def = getLayout(page.layout);
+/** 장 하나 + 칸 값으로 슬라이드를 그린다 (사진·원본 글은 그대로) */
+export function applyPage(slide: Slide, spec: PageSpec, fields: Fields, look: Look): Slide {
+  const def = getLayout(spec.layout);
   if (!def) return slide;
   const built = def.build(fields, {
     H: slideHeight(slide.ratio),
-    accent: page.accent || look.accent || DEFAULT_ACCENT,
+    accent: look.accent || DEFAULT_ACCENT,
     handle: look.handle || "@my_account",
   });
-  // 바탕색을 밝기가 반대인 색으로 바꿨으면 기본 글자색도 뒤집는다 (어두운 바탕에 검정 글씨가 묻히지 않게)
-  const bg = page.bg || built.bg;
-  // (사진이 꽉 찬 양식은 글씨가 사진 위에 있으니 뒤집지 않는다)
-  const flip = !!page.bg && built.photo !== undefined && isDark(page.bg) === (built.ink === "dark");
+  // 바탕색을 밝기가 반대인 색으로 바꿨으면 기본 글자색도 뒤집는다 (사진이 꽉 찬 양식은 그대로)
+  const flip = !!spec.bg && built.photo !== undefined && isDark(spec.bg) === (built.ink === "dark");
   const ink = flip ? (built.ink === "dark" ? "light" : "dark") : built.ink;
   const blocks = built.blocks.map((b) => {
     let x = b;
     if (flip && !b.box && FLIP[b.color.toLowerCase()]) x = { ...x, color: FLIP[b.color.toLowerCase()] };
-    const o = b.slot ? page.styles?.[b.slot] : undefined;
+    const o = b.slot ? spec.styles?.[b.slot] : undefined;
     return o ? { ...x, ...o } : x;
   });
   return {
     ...slide,
-    page: page.id,
-    layout: page.layout,
+    layout: spec.layout,
     fields,
-    bg,
+    bg: spec.bg || built.bg,
     ink,
     photo: built.photo,
     shapes: built.shapes,
@@ -108,14 +89,26 @@ export function applyPage(slide: Slide, page: PageTemplate, fields: Fields, look
   };
 }
 
-/** 템플릿 화면 미리보기용 */
-export function samplePage(page: PageTemplate, look: Look): Slide {
-  const base: Slide = { image: null, original: "", ratio: 1.25, bg: "", blocks: [] };
-  const def = getLayout(page.layout);
-  return def ? applyPage(base, page, def.sample, look) : base;
+/** 마지막 장 — AI 없이 템플릿에 적어 둔 글 그대로. 사진 칸 없이 바탕색만 */
+export function lastSlide(spec: PageSpec, look: Look): Slide {
+  const def = getLayout(spec.layout);
+  const base: Slide = { image: null, original: "", ratio: 1.25, bg: "", blocks: [], fixedLast: true };
+  if (!def) return base;
+  return { ...applyPage(base, spec, spec.fields ?? def.sample, look), photo: null };
 }
 
-// ── 즐겨찾기 (조합·장 템플릿 모두, id로) ─────────────────
+/** 미리보기용 보기 슬라이드 (마지막 장은 적어 둔 글로) */
+export function samplePage(spec: PageSpec, look: Look): Slide {
+  const def = getLayout(spec.layout);
+  const base: Slide = { image: null, original: "", ratio: 1.25, bg: "", blocks: [] };
+  if (!def) return base;
+  const s = applyPage(base, spec, spec.fields ?? def.sample, look);
+  return def.kind === "last" ? { ...s, photo: null } : s;
+}
+
+export const kindOfSpec = (spec: PageSpec): LayoutKind | undefined => getLayout(spec.layout)?.kind;
+
+// ── 즐겨찾기 (템플릿·양식 모두, id로) ─────────────────
 const FAV_KEY = "cardnews.favorites.v1";
 
 export function loadFavorites(): Set<string> {
