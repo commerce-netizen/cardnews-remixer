@@ -2,52 +2,28 @@
 
 import { useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from "react";
 import { SlidePreview } from "./SlideCard";
-import TemplateManager from "./TemplateManager";
-import StylePanel from "./StylePanel";
-import { ColorField, Range, Toggle } from "./controls";
-import FontPicker from "./FontPicker";
+import { Toggle } from "./controls";
 import { resizeImage } from "@/lib/client-images";
 import { IMAGE_GEN_ENABLED, makeAiPhoto } from "@/lib/slide-image";
 import { downloadZip, renderSlides, triggerDownload } from "@/lib/export";
 import { DISCLOSURE, buildCaption } from "@/lib/caption";
 import { buildDm, type DmContent } from "@/lib/dm";
 import { loadFonts } from "@/lib/webfonts";
-import {
-  ROLES,
-  ROLE_LABEL,
-  SLIDE_W,
-  newBlock,
-  slideHeight,
-  styleOf,
-  type TextBlock,
-  type TextRole,
-} from "@/lib/layout";
+import { ROLE_LABEL, SLIDE_W, newBlock, slideHeight, styleOf, type TextBlock } from "@/lib/layout";
 import {
   BUILTIN_TEMPLATES,
   DEFAULT_TEMPLATE,
   allTemplates,
   applyTemplateToBlocks,
   blockFontNeeds,
-  duplicateTemplate,
   findTemplate,
   loadActiveId,
-  loadUserTemplates,
   saveActiveId,
-  saveUserTemplates,
-  stylesFromBlocks,
-  uniqueName,
   type Template,
   type WatermarkStyle,
 } from "@/lib/templates";
 import type { Slide } from "@/lib/types";
-import { DEFAULT_ACCENT, KIND_LABEL, layoutsOf, type LayoutKind } from "@/lib/magazine";
-import { comboSlides, dropLayout, fillSlide, redraw, slideText, syncField, withTypeOverrides } from "@/lib/magazine-client";
-import { snapWeight } from "@/lib/webfonts";
-import type { PageSpec } from "@/lib/page-templates";
-
-/** 포인트 색 고르기 보기 */
-const ACCENTS = ["#e5481c", "#2b6fff", "#0b4a8f", "#2fb79a", "#f2b705", "#d6336c", "#141414"];
-const KINDS: LayoutKind[] = ["cover", "inner", "last"];
+import { comboSlides, dropLayout, slideText, syncField } from "@/lib/magazine-client";
 
 type Props = {
   /** 음식·레시피 카드뉴스인지 (false = 정치·시사·패션 등 일반 → 캡션 CTA·고정 댓글·자동 DM 없음) */
@@ -64,8 +40,6 @@ type Props = {
   onRestart: () => void;
 };
 
-type Sel = { slide: number; id: string } | null;
-
 export default function Editor({ recipe, commerce, slides, captionBody, dmContent, onChangeSlides, onRemixAgain, onRestart }: Props) {
   const [caption, setCaption] = useState("");
   const [dm, setDm] = useState("");
@@ -78,32 +52,18 @@ export default function Editor({ recipe, commerce, slides, captionBody, dmConten
   const [adLabel, setAdLabel] = useState(commerce);
   // 일반 카드뉴스: 쿠팡 파트너스 고지를 캡션에 붙일지 (레시피는 항상 붙음)
   const [disclose, setDisclose] = useState(commerce);
-  const [showTemplates, setShowTemplates] = useState(false);
   const [askRestart, setAskRestart] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [toast, setToast] = useState<string | null>(null);
   const [results, setResults] = useState<string[] | null>(null);
   const [copied, setCopied] = useState(false);
   const [genIndex, setGenIndex] = useState<number | null>(null);
-  const [sel, setSel] = useState<Sel>(null);
-  const [applyPos, setApplyPos] = useState(false);
-  const [saveName, setSaveName] = useState("");
   // AI 새 사진으로 바꾸기 전 사진 (되돌리기용)
   const [prevImages, setPrevImages] = useState<Record<number, string | null>>({});
-  // 매거진 레이아웃: 포인트 색, 양식을 새로 채우는 중인 장
-  const [accent, setAccent] = useState(DEFAULT_ACCENT);
-  const [layoutIndex, setLayoutIndex] = useState<number | null>(null);
   const nodes = useRef<(HTMLDivElement | null)[]>([]);
-  const editorRef = useRef<HTMLElement>(null);
   const resultBlobs = useRef<Blob[]>([]);
 
   const template = useMemo(() => findTemplate(templates, templateId), [templates, templateId]);
-
-  const say = (msg: string) => {
-    setToast(msg);
-    setTimeout(() => setToast((t) => (t === msg ? null : t)), 2500);
-  };
 
   // 저장해 둔 템플릿 목록(기본 제공 + 내가 만든 것)을 불러와 지난번에 고른 템플릿으로 시작
   useEffect(() => {
@@ -114,8 +74,7 @@ export default function Editor({ recipe, commerce, slides, captionBody, dmConten
     setTemplateId(t.id);
     setWatermark({ ...t.watermark });
     setAdLabel(t.adLabel && commerce);
-    if (t.combo) setAccent(t.combo.accent);
-    else setSlides((prev) => prev.map((s) => (s.layout ? s : { ...s, blocks: applyTemplateToBlocks(s.blocks, t, true) })));
+    if (!t.combo) setSlides((prev) => prev.map((s) => (s.layout ? s : { ...s, blocks: applyTemplateToBlocks(s.blocks, t, true) })));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -163,7 +122,6 @@ export default function Editor({ recipe, commerce, slides, captionBody, dmConten
     setWatermark({ ...t.watermark });
     setAdLabel(t.adLabel && commerce);
     if (t.combo) {
-      setAccent(t.combo.accent);
       setBusy("템플릿에 맞게 글을 나누는 중…");
       try {
         // 템플릿을 바꾸면 장마다 정했던 글꼴·크기는 새 템플릿 것으로 돌아간다
@@ -184,63 +142,6 @@ export default function Editor({ recipe, commerce, slides, captionBody, dmConten
     );
   }
 
-  /** 한 장의 템플릿 바꾸기 — AI가 그 장 글을 새 템플릿 칸에 맞게 다시 나눈다 */
-  async function changeLayout(i: number, id: string) {
-    const s = slides[i];
-    setError(null);
-    if (!id) {
-      setSlides((prev) => prev.map((x, j) => (j === i ? { ...dropLayout(x), blocks: classicBlocks(i, slideText(x), template) } : x)));
-      return;
-    }
-    setLayoutIndex(i);
-    try {
-      const next = await fillSlide(s, specFor(id), { accent, handle: watermark.text }, {
-        context: slides.map((x, j) => `[${j + 1}장] ${slideText(x)}`).join("\n"),
-        hasPhoto: !!(s.image || s.sourceImage),
-      }, true);
-      setSlides((prev) => prev.map((x, j) => (j === i ? withTypeOverrides(next) : x)));
-      setSel(null);
-    } catch (e) {
-      setError(`${i + 1}번 장: ${(e as Error).message}`);
-    } finally {
-      setLayoutIndex(null);
-    }
-  }
-
-  /** 이 양식에 지금 템플릿 조합에서 고친 모양이 있으면 그걸로 */
-  const specFor = (layout: string): PageSpec => {
-    const c = template.combo;
-    return [c?.cover, c?.inner, c?.last].find((x) => x?.layout === layout) ?? { layout };
-  };
-
-  /** 포인트 색 바꾸기 — AI 없이 다시 그린다 */
-  const changeAccent = (v: string) => {
-    setAccent(v);
-    setSlides((prev) => prev.map((s) => redraw(s, s.layout ? specFor(s.layout) : undefined, { accent: v, handle: watermark.text })));
-  };
-  const hasLayout = slides.some((s) => s.layout);
-
-  // ── 글꼴·글자 크기: 썸네일·내지·마지막 장별로 한 번에, 또는 장마다 따로 ──
-  const kindOfSlide = (s: Slide, i: number): LayoutKind => (i === 0 ? "cover" : s.fixedLast ? "last" : "inner");
-  const setSlideFont = (pick: (s: Slide, i: number) => boolean, fontId: string) =>
-    setSlides((prev) =>
-      prev.map((s, i) =>
-        pick(s, i) ? { ...s, fontOverride: fontId, blocks: s.blocks.map((b) => ({ ...b, fontId, weight: snapWeight(fontId, b.weight) })) } : s,
-      ),
-    );
-  const scaleSlide = (pick: (s: Slide, i: number) => boolean, step: number) =>
-    setSlides((prev) =>
-      prev.map((s, i) => {
-        if (!pick(s, i)) return s;
-        const cur = s.sizeScale ?? 1;
-        const next = Math.min(2, Math.max(0.5, Math.round((cur + step) * 10) / 10));
-        const k = next / cur;
-        return { ...s, sizeScale: next, blocks: s.blocks.map((b) => ({ ...b, size: Math.max(10, Math.round(b.size * k)) })) };
-      }),
-    );
-  const kindsHere = KINDS.filter((k) => slides.some((s, i) => kindOfSlide(s, i) === k));
-  const firstOf = (k: LayoutKind) => slides.find((s, i) => kindOfSlide(s, i) === k);
-
   const updateSlide = (i: number, patch: Partial<Slide>) => setSlides((prev) => prev.map((s, j) => (j === i ? { ...s, ...patch } : s)));
   const updateBlock = (i: number, id: string, patch: Partial<TextBlock>) =>
     setSlides((prev) =>
@@ -251,56 +152,6 @@ export default function Editor({ recipe, commerce, slides, captionBody, dmConten
         return patch.text !== undefined ? syncField(next, id, patch.text) : next;
       }),
     );
-
-  const addBlock = (i: number) => {
-    const role: TextRole = i === 0 ? "title" : "body";
-    const b = newBlock(role, "새 글", styleOf(template.styles[role] ?? template.styles.body));
-    setSlides((prev) => prev.map((s, j) => (j === i ? { ...s, blocks: [...s.blocks, b] } : s)));
-    setSel({ slide: i, id: b.id });
-  };
-  const removeBlock = (i: number, id: string) => {
-    setSlides((prev) => prev.map((s, j) => (j === i ? { ...s, blocks: s.blocks.filter((b) => b.id !== id) } : s)));
-    setSel(null);
-  };
-  const duplicateBlock = (i: number, b: TextBlock) => {
-    const c = { ...newBlock(b.role, b.text, styleOf(b)), accentLines: b.accentLines, y: Math.min(95, b.y + 4) };
-    setSlides((prev) => prev.map((s, j) => (j === i ? { ...s, blocks: [...s.blocks, c] } : s)));
-    setSel({ slide: i, id: c.id });
-  };
-
-  /** 고른 글 상자의 모양을 같은 역할의 모든 글 상자에 */
-  const applyToRole = (b: TextBlock) => {
-    const st = styleOf(b, applyPos);
-    let n = 0;
-    setSlides((prev) =>
-      prev.map((s) => ({
-        ...s,
-        blocks: s.blocks.map((x) => (x.role === b.role && x.id !== b.id ? (n++, { ...x, ...st }) : x)),
-      })),
-    );
-    say(`모든 장의 '${ROLE_LABEL[b.role]}'에 같은 모양을 입혔어요.`);
-  };
-
-  /** 지금 디자인을 내 템플릿으로 저장 */
-  const saveAsTemplate = () => {
-    const users = loadUserTemplates();
-    const all = [...BUILTIN_TEMPLATES, ...users];
-    const name = saveName.trim() || uniqueName(all, "내 디자인");
-    const base = duplicateTemplate(template, name);
-    const t: Template = {
-      ...base,
-      styles: stylesFromBlocks(slides.flatMap((s) => s.blocks), template.styles),
-      watermark: { ...watermark },
-      adLabel,
-    };
-    saveUserTemplates([...users, t]);
-    const list = allTemplates();
-    setTemplates(list);
-    setTemplateId(t.id);
-    saveActiveId(t.id);
-    setSaveName("");
-    say(`'${name}' 템플릿으로 저장했어요. 다음 카드뉴스에도 바로 쓸 수 있어요.`);
-  };
 
   const forgetPrev = (i: number) =>
     setPrevImages((p) => {
@@ -358,7 +209,6 @@ export default function Editor({ recipe, commerce, slides, captionBody, dmConten
 
   const approve = async () => {
     setError(null);
-    setSel(null);
     setBusy(`완성본 만드는 중… (0 / ${slides.length}장)`);
     try {
       await loadFonts(JSON.parse(fontKey));
@@ -374,13 +224,6 @@ export default function Editor({ recipe, commerce, slides, captionBody, dmConten
       setBusy(null);
     }
   };
-
-  const openStyle = (i: number, id: string) => {
-    setSel({ slide: i, id });
-    setTimeout(() => editorRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
-  };
-
-  const selected = sel ? slides[sel.slide]?.blocks.find((b) => b.id === sel.id) ?? null : null;
 
   return (
     <div>
@@ -404,80 +247,25 @@ export default function Editor({ recipe, commerce, slides, captionBody, dmConten
 
       <h1>각색이 끝났어요!</h1>
       <p className="lead">
-        글을 <b>누르면</b> 글꼴·크기·색·위치를 바꿀 수 있고, <b>끌면</b> 옮겨져요. 다 고친 뒤 아래 초록 버튼을 누르세요.
+        완성본을 확인하고 글만 고치면 돼요. 디자인은 <b>디자인 템플릿</b> 탭에서 바꿀 수 있어요. 다 됐으면 아래 초록 버튼을 누르세요.
       </p>
 
       {error && <div className="notice notice-error" role="alert">{error}</div>}
-      {toast && <div className="notice notice-info" role="status">{toast}</div>}
 
-      <div className="duo">
-        <section className="card stack">
-          <h2 style={{ margin: 0 }}>① 글 디자인 템플릿</h2>
-          <div>
-            <label className="field-label" htmlFor="template">역할(제목·본문…)별 글꼴·크기·색·위치를 한 번에 입혀요</label>
-            <select id="template" value={templateId} onChange={(e) => applyTemplate(e.target.value)}>
-              {templates.map((t) => (
-                <option key={t.id} value={t.id}>{t.name}{t.builtin ? " (기본 제공)" : ""}</option>
-              ))}
-            </select>
-          </div>
-          {hasLayout && <ColorField label="포인트 색 (띠·번호·강조)" value={accent} presets={ACCENTS} onChange={changeAccent} />}
-          <button className="btn btn-secondary btn-block" onClick={() => setShowTemplates(true)}>
-            🎨 템플릿 만들기 · 고치기
-          </button>
-          <div className="save-tpl">
-            <input type="text" placeholder="지금 디자인을 템플릿으로 저장 (이름)" value={saveName} onChange={(e) => setSaveName(e.target.value)} />
-            <button className="btn btn-primary" onClick={saveAsTemplate}>💾 저장</button>
-          </div>
-        </section>
-
-        <section className="card stack">
-          <h2 style={{ margin: 0 }}>② 워터마크 · 표시</h2>
-          <div>
-            <label className="field-label" htmlFor="watermark">모든 장에 들어가는 내 채널 이름</label>
-            <input
-              id="watermark"
-              type="text"
-              value={watermark.text}
-              onChange={(e) => { setWatermark({ ...watermark, text: e.target.value }); setResults(null); }}
-              placeholder="예) @내계정 (비우면 워터마크 없음)"
-              autoComplete="off"
-            />
-          </div>
-          <div>
-            <span className="field-label">워터마크 글꼴</span>
-            <FontPicker value={watermark.fontId} onChange={(fontId) => setWatermark({ ...watermark, fontId })} sample={watermark.text} />
-          </div>
-          <Range label="워터마크 크기" value={watermark.size} min={14} max={80} unit="px" onChange={(size) => setWatermark({ ...watermark, size })} />
-          <Toggle label="[광고] 표시" hint="쿠팡 파트너스·협찬 게시물이면 꼭 켜 두세요" checked={adLabel} onChange={(v) => { setAdLabel(v); setResults(null); }} />
-          {!recipe && (
-            <Toggle label="캡션에 쿠팡 파트너스 고지 붙이기" checked={disclose} onChange={setDisclose} />
-          )}
-        </section>
-      </div>
-
-      <section className="card stack" style={{ marginTop: 20 }}>
-        <h2 style={{ margin: 0 }}>글꼴 · 글자 크기</h2>
-        <p className="muted small" style={{ margin: 0 }}>썸네일·내지·마지막 장마다 따로 정할 수 있어요. 한 장만 바꾸려면 아래 그 장 카드에서 바꾸세요.</p>
-        <div className="type-rows">
-          {kindsHere.map((k) => {
-            const pick = (s: Slide, i: number) => kindOfSlide(s, i) === k;
-            const first = firstOf(k);
-            const font = first?.fontOverride ?? first?.blocks.find((b) => b.role !== "handle")?.fontId ?? "Pretendard";
-            return (
-              <div className="type-row" key={k}>
-                <b className="type-row-label">{KIND_LABEL[k]}</b>
-                <div className="type-row-font">
-                  <FontPicker value={font} onChange={(f) => setSlideFont(pick, f)} sample={first?.blocks[0]?.text.split("\n")[0]} />
-                </div>
-                <SizeButtons scale={first?.sizeScale ?? 1} onScale={(f) => scaleSlide(pick, f)} />
-              </div>
-            );
-          })}
+      <section className="card stack">
+        <div>
+          <label className="field-label" htmlFor="template">템플릿</label>
+          <select id="template" value={templateId} onChange={(e) => applyTemplate(e.target.value)} disabled={!!busy}>
+            {templates.map((t) => (
+              <option key={t.id} value={t.id}>{t.name}{t.builtin ? " (기본 제공)" : ""}</option>
+            ))}
+          </select>
         </div>
+        <Toggle label="[광고] 표시" hint="쿠팡 파트너스·협찬 게시물이면 꼭 켜 두세요" checked={adLabel} onChange={(v) => { setAdLabel(v); setResults(null); }} />
+        {!recipe && <Toggle label="캡션에 쿠팡 파트너스 고지 붙이기" checked={disclose} onChange={setDisclose} />}
       </section>
 
-      <h2 style={{ marginTop: 40, marginBottom: 6 }}>③ 장마다 사진·글 고치기</h2>
+      <h2 style={{ marginTop: 32, marginBottom: 6 }}>완성본 · 글 고치기</h2>
       <p className="rail-hint">옆으로 밀어서 다음 장을 보세요 →</p>
       <div className="slide-rail">
         {slides.map((s, i) => (
@@ -488,16 +276,8 @@ export default function Editor({ recipe, commerce, slides, captionBody, dmConten
               slide={s}
               watermark={watermark}
               adLabel={adLabel}
-              selectedId={sel?.slide === i ? sel.id : null}
-              onSelect={(id) => setSel(id ? { slide: i, id } : null)}
-              onMoveBlock={(id, patch) => updateBlock(i, id, patch)}
               overlay={
-                layoutIndex === i ? (
-                  <div className="preview-overlay" role="status">
-                    <div className="spinner" />
-                    <p>템플릿에 맞게 글을 나누는 중이에요</p>
-                  </div>
-                ) : genIndex === i && (
+                genIndex === i && (
                   <div className="preview-overlay" role="status">
                     <div className="spinner" />
                     <p>AI가 새 사진을 만드는 중이에요<br />1~2분쯤 걸려요</p>
@@ -507,59 +287,19 @@ export default function Editor({ recipe, commerce, slides, captionBody, dmConten
             />
 
             <div className="stack" style={{ marginTop: 20 }}>
-              <div>
-                <label className="field-label" htmlFor={`layout-${i}`}>이 장 템플릿</label>
-                <select
-                  id={`layout-${i}`}
-                  value={s.layout ?? ""}
-                  disabled={layoutIndex !== null || !!busy}
-                  onChange={(e) => changeLayout(i, e.target.value)}
-                >
-                  <option value="">글 상자만 (기본)</option>
-                  {KINDS.map((k) => (
-                    <optgroup key={k} label={KIND_LABEL[k]}>
-                      {layoutsOf(k).map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
-                    </optgroup>
-                  ))}
-                </select>
-              </div>
-              <div className="slide-type">
-                <span className="field-label">이 장 글꼴 · 글자 크기</span>
-                <FontPicker
-                  value={s.fontOverride ?? s.blocks.find((b) => b.role !== "handle")?.fontId ?? "Pretendard"}
-                  onChange={(f) => setSlideFont((_, j) => j === i, f)}
-                  sample={s.blocks[0]?.text.split("\n")[0]}
-                />
-                <SizeButtons scale={s.sizeScale ?? 1} onScale={(f) => scaleSlide((_, j) => j === i, f)} />
-              </div>
-              {s.blocks.map((b) => {
-                const on = sel?.slide === i && sel.id === b.id;
-                return (
-                  <div key={b.id} className={`block-field${on ? " on" : ""}`}>
-                    <div className="block-field-head">
-                      <select
-                        value={b.role}
-                        onChange={(e) => updateBlock(i, b.id, { role: e.target.value as TextRole })}
-                        aria-label="글 역할"
-                      >
-                        {ROLES.map((r) => <option key={r} value={r}>{ROLE_LABEL[r]}</option>)}
-                      </select>
-                      <button className="btn btn-secondary btn-sm" onClick={() => (on ? setSel(null) : openStyle(i, b.id))}>
-                        {on ? "닫기" : "🎨 모양"}
-                      </button>
-                    </div>
+              {s.blocks
+                .filter((b) => b.role !== "handle" && (b.field || !s.layout))
+                .map((b) => (
+                  <div key={b.id} className="block-field">
+                    <span className="field-label">{ROLE_LABEL[b.role]}</span>
                     <textarea
                       rows={Math.min(5, Math.max(2, b.text.split("\n").length))}
-                      value={b.role === "handle" && watermark.text.trim() ? watermark.text : b.text}
-                      disabled={b.role === "handle" && !!watermark.text.trim()}
-                      onFocus={() => setSel({ slide: i, id: b.id })}
+                      value={b.text}
                       onChange={(e) => updateBlock(i, b.id, { text: e.target.value })}
                       aria-label={`${ROLE_LABEL[b.role]} 글`}
                     />
                   </div>
-                );
-              })}
-              <button className="btn btn-secondary" onClick={() => addBlock(i)}>➕ 글 상자 추가</button>
+                ))}
 
               <div className="row">
                 <label className="btn btn-secondary" style={{ flex: "1 1 200px" }}>
@@ -596,49 +336,7 @@ export default function Editor({ recipe, commerce, slides, captionBody, dmConten
         ))}
       </div>
 
-      {/* 고른 글 상자 모양 고치기 — 아래에 붙어 따라다님 */}
-      {selected && sel && (
-        <section className="card stack block-editor" ref={editorRef}>
-          <div className="block-editor-head">
-            <h2 style={{ margin: 0 }}>
-              {sel.slide + 1}번 장 · {ROLE_LABEL[selected.role]} 모양
-            </h2>
-            <button className="btn btn-secondary btn-sm" onClick={() => setSel(null)}>닫기 ✕</button>
-          </div>
-          <div className="split">
-            <div className="sticky">
-              <SlidePreview
-                slide={slides[sel.slide]}
-                watermark={watermark}
-                adLabel={adLabel}
-                selectedId={sel.id}
-                onSelect={(id) => id && setSel({ slide: sel.slide, id })}
-                onMoveBlock={(id, patch) => updateBlock(sel.slide, id, patch)}
-              />
-            </div>
-            <div className="stack">
-          <StylePanel
-            style={selected}
-            sample={selected.text.split("\n")[0]}
-            lines={selected.text.split("\n").length}
-            onChange={(patch) => updateBlock(sel.slide, selected.id, patch)}
-          />
-          <div className="stack sub">
-            <Toggle label="위치·크기도 함께 적용" checked={applyPos} onChange={setApplyPos} />
-            <div className="row">
-              <button className="btn btn-primary" onClick={() => applyToRole(selected)}>
-                모든 장의 &apos;{ROLE_LABEL[selected.role]}&apos;에 이 모양 적용
-              </button>
-              <button className="btn btn-secondary" onClick={() => duplicateBlock(sel.slide, selected)}>글 상자 복제</button>
-              <button className="btn btn-secondary" onClick={() => removeBlock(sel.slide, selected.id)}>글 상자 지우기</button>
-            </div>
-          </div>
-            </div>
-          </div>
-        </section>
-      )}
-
-      <h2 style={{ marginTop: 40, marginBottom: 16 }}>④ 올릴 글 확인하기</h2>
+      <h2 style={{ marginTop: 40, marginBottom: 16 }}>올릴 글 확인하기</h2>
       <div className="trio">
         <section className="card">
           <h2>캡션 (본문 글)</h2>
@@ -717,38 +415,6 @@ export default function Editor({ recipe, commerce, slides, captionBody, dmConten
         </div>
       </div>
 
-      {/* 템플릿 편집은 겹쳐 띄운다 — 다른 화면으로 넘어가면 고치던 카드뉴스가 사라지기 때문 */}
-      {showTemplates && (
-        <div className="overlay-page">
-          <div className="page">
-            <TemplateManager
-              onClose={() => {
-                setShowTemplates(false);
-              }}
-              onPick={(id) => {
-                const list = allTemplates();
-                setTemplates(list);
-                applyTemplate(id, list);
-              }}
-            />
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-/** 글자 크기 줄이기·키우기 (10%씩, 50%~200%) — onScale에는 +0.1 / -0.1 */
-function SizeButtons({ scale, onScale }: { scale: number; onScale: (step: number) => void }) {
-  return (
-    <div className="size-btns">
-      <button type="button" className="btn btn-secondary btn-sm" onClick={() => onScale(-0.1)} disabled={scale <= 0.5} aria-label="글자 작게">
-        가<small>−</small>
-      </button>
-      <span className="size-val">{Math.round(scale * 100)}%</span>
-      <button type="button" className="btn btn-secondary btn-sm" onClick={() => onScale(0.1)} disabled={scale >= 2} aria-label="글자 크게">
-        가<b>+</b>
-      </button>
     </div>
   );
 }

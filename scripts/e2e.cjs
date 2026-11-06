@@ -74,14 +74,17 @@ const BASE = `http://127.0.0.1:${PORT}`;
     assert.ok(await page.isVisible("text=3번 장"));
     await page.locator(".slide-rail > .card >> nth=0").locator("textarea").first().fill( "직접 고친\n표지 제목");
     await page.locator(".slide-rail > .card >> nth=1").locator("textarea").first().fill( "직접 고친 본문");
-    await page.fill("#watermark", "우리가게");
+    // 결과 화면은 완성본 + 글 고치기만 — 디자인 고치는 칸(템플릿 고치기·글꼴·모양·워터마크 입력)은 없다
+    assert.equal(await page.locator("#watermark").count(), 0);
+    assert.equal(await page.locator("button:has-text('모양')").count(), 0);
+    assert.equal(await page.locator("text=템플릿 만들기 · 고치기").count(), 0);
     const first = page.locator(".preview-frame >> nth=0");
     assert.ok(await first.getByText("직접 고친").isVisible());
     assert.ok(await first.getByText("[광고]").isVisible());
-    assert.ok(await first.getByText("우리가게").isVisible());
+    assert.ok(await first.getByText("맛집도둑").isVisible());
     assert.ok(await page.locator(".preview-frame >> nth=1").getByText("직접 고친 본문").isVisible());
-    assert.equal(await page.locator(".slide-rail .preview-frame", { hasText: "우리가게" }).count(), 3);
-    console.log("✓ 제목·본문·워터마크 수정이 모든 장 미리보기에 반영");
+    assert.equal(await page.locator(".slide-rail .preview-frame", { hasText: "맛집도둑" }).count(), 3);
+    console.log("✓ 제목·본문 수정이 미리보기에 반영 + 디자인 편집 칸 없음 (워터마크는 템플릿 것)");
 
     // 장별 사진 바꾸기
     const before = await page.locator(".preview-frame >> nth=1").locator("img").getAttribute("src");
