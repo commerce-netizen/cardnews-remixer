@@ -1,8 +1,8 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import Editor from "@/components/Editor";
+import { DIRTY_ATTR } from "@/components/SiteNav";
 import { prepareImages, type PreparedImage } from "@/lib/client-images";
 import { IMAGE_GEN_ENABLED, makeAiPhoto } from "@/lib/slide-image";
 import type { DmContent } from "@/lib/dm";
@@ -165,6 +165,14 @@ export default function Home() {
     );
   };
 
+  // 만드는 중·편집 중엔 위 탭으로 다른 화면에 갈 때 한 번 묻는다 (작업물이 사라지므로)
+  useEffect(() => {
+    const busy = step === "loading" || step === "edit";
+    if (busy) document.body.setAttribute(DIRTY_ATTR, "");
+    else document.body.removeAttribute(DIRTY_ATTR);
+    return () => document.body.removeAttribute(DIRTY_ATTR);
+  }, [step]);
+
   // 인기 게시물 탭의 '각색하기' → /?url=게시물주소 로 들어오면 바로 시작
   const autoStarted = useRef(false);
   useEffect(() => {
@@ -232,11 +240,6 @@ export default function Home() {
 
       {step === "home" && (
         <>
-          <nav className="tabs">
-            <span className="tab on">사진 콘텐츠 만들기</span>
-            <Link className="tab" href="/hot">인기 게시물</Link>
-            <Link className="tab" href="/templates">디자인 템플릿</Link>
-          </nav>
           <h1>사진 콘텐츠 만들기</h1>
           <p className="lead">주소만 넣으면 새 사진·새 글로 다시 만들어 드려요.</p>
 

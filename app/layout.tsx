@@ -3,6 +3,7 @@ import "./globals.css";
 import { jua, logoFont, pretendard } from "@/lib/fonts";
 import Brand from "@/components/Brand";
 import ThemeToggle from "@/components/ThemeToggle";
+import SiteNav from "@/components/SiteNav";
 
 export const metadata: Metadata = {
   title: "돈작가 사진 생성기",
@@ -32,6 +33,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <div className="site-header-inner">
             <Brand />
             <ThemeToggle />
+          </div>
+          <div className="site-header-tabs">
+            <SiteNav />
           </div>
         </header>
         {children}
