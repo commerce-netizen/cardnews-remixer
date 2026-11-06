@@ -66,9 +66,9 @@ export default function HotBoard() {
 
   return (
     <>
-      <h1>🔥 인기 카드뉴스</h1>
+      <h1>인기 게시물</h1>
       <p className="lead">
-        카드뉴스 상위 게시물을 매일 모아서, 반응 좋은 순서로 보여 드려요.
+        상위 게시물을 매일 모아서, 반응 좋은 순서로 보여 드려요.
         {data && (
           <>
             <br />
@@ -111,7 +111,7 @@ export default function HotBoard() {
           </select>
         </div>
         <p className="muted small" style={{ margin: 0 }}>
-          {PERIODS.find((p) => p.key === period)?.hint} 보여 드려요. 카드뉴스는 인스타가 조회수를 공개하지 않아서 좋아요·댓글로 순위를 매겨요.
+          {PERIODS.find((p) => p.key === period)?.hint} 보여 드려요. 사진 게시물은 인스타가 조회수를 공개하지 않아서 좋아요·댓글로 순위를 매겨요.
         </p>
       </div>
 

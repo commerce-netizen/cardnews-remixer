@@ -1,14 +1,14 @@
 import Link from "next/link";
 import HotBoard from "./HotBoard";
 
-export const metadata = { title: "인기 카드뉴스 · 카드뉴스 각색기" };
+export const metadata = { title: "인기 게시물 · 카드뉴스 각색기" };
 
 export default function HotPage() {
   return (
     <main className="page">
       <nav className="tabs">
-        <Link className="tab" href="/">카드뉴스 만들기</Link>
-        <span className="tab on">🔥 인기 카드뉴스</span>
+        <Link className="tab" href="/">사진 콘텐츠 만들기</Link>
+        <span className="tab on">인기 게시물</span>
         <Link className="tab" href="/templates">디자인 템플릿</Link>
       </nav>
       <HotBoard />
