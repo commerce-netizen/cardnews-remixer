@@ -988,3 +988,16 @@ input[type="range"] { width: 100%; height: 32px; accent-color: var(--primary); }
 /* 내 템플릿 카드: 고치기·복제·지우기를 한 줄로 (기본 제공 카드와 높이 맞춤) */
 .tpl-actions { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; width: 100%; }
 .tpl-actions .btn { min-height: 48px; padding: 8px 6px; font-size: 0.92rem; flex: none; }
+
+/* ── 글꼴·글자 크기 ─────────────────────────────── */
+.type-rows { display: flex; flex-direction: column; gap: 12px; }
+.type-row { display: grid; grid-template-columns: 90px 1fr auto; align-items: center; gap: 12px; }
+.type-row-label { font-size: 0.95rem; }
+.size-btns { display: inline-flex; align-items: center; gap: 6px; }
+.size-btns .btn { min-width: 52px; font-weight: 800; }
+.size-btns .btn small, .size-btns .btn b { font-size: 0.8em; margin-left: 1px; }
+.size-val { min-width: 48px; text-align: center; font-weight: 700; font-size: 0.9rem; color: var(--muted); }
+.slide-type { display: flex; flex-direction: column; gap: 8px; padding: 12px; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--bg-soft); }
+@media (max-width: 720px) {
+  .type-row { grid-template-columns: 1fr; gap: 6px; }
+}

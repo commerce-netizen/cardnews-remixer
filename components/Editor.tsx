@@ -41,7 +41,8 @@ import {
 } from "@/lib/templates";
 import type { Slide } from "@/lib/types";
 import { DEFAULT_ACCENT, KIND_LABEL, layoutsOf, type LayoutKind } from "@/lib/magazine";
-import { comboSlides, dropLayout, fillSlide, redraw, slideText, syncField } from "@/lib/magazine-client";
+import { comboSlides, dropLayout, fillSlide, redraw, slideText, syncField, withTypeOverrides } from "@/lib/magazine-client";
+import { snapWeight } from "@/lib/webfonts";
 import type { PageSpec } from "@/lib/page-templates";
 
 /** 포인트 색 고르기 보기 */
@@ -165,7 +166,8 @@ export default function Editor({ recipe, commerce, slides, captionBody, dmConten
       setAccent(t.combo.accent);
       setBusy("템플릿에 맞게 글을 나누는 중…");
       try {
-        const content = slides.filter((x) => !x.fixedLast);
+        // 템플릿을 바꾸면 장마다 정했던 글꼴·크기는 새 템플릿 것으로 돌아간다
+        const content = slides.filter((x) => !x.fixedLast).map((x) => ({ ...x, fontOverride: undefined, sizeScale: undefined }));
         const next = await comboSlides(content, t.combo, t.watermark.text, (i) => !!(content[i].image || content[i].sourceImage));
         setSlides(() => next);
       } finally {
@@ -174,7 +176,7 @@ export default function Editor({ recipe, commerce, slides, captionBody, dmConten
       return;
     }
     setSlides((prev) =>
-      prev.filter((s) => !s.fixedLast).map((s, i) =>
+      prev.filter((s) => !s.fixedLast).map((s0, i) => ({ ...s0, fontOverride: undefined, sizeScale: undefined })).map((s, i) =>
         s.layout
           ? { ...dropLayout(s), blocks: classicBlocks(i, slideText(s), t) }
           : { ...s, blocks: applyTemplateToBlocks(s.blocks, t, true) },
@@ -196,7 +198,7 @@ export default function Editor({ recipe, commerce, slides, captionBody, dmConten
         context: slides.map((x, j) => `[${j + 1}장] ${slideText(x)}`).join("\n"),
         hasPhoto: !!(s.image || s.sourceImage),
       }, true);
-      setSlides((prev) => prev.map((x, j) => (j === i ? next : x)));
+      setSlides((prev) => prev.map((x, j) => (j === i ? withTypeOverrides(next) : x)));
       setSel(null);
     } catch (e) {
       setError(`${i + 1}번 장: ${(e as Error).message}`);
@@ -217,6 +219,27 @@ export default function Editor({ recipe, commerce, slides, captionBody, dmConten
     setSlides((prev) => prev.map((s) => redraw(s, s.layout ? specFor(s.layout) : undefined, { accent: v, handle: watermark.text })));
   };
   const hasLayout = slides.some((s) => s.layout);
+
+  // ── 글꼴·글자 크기: 썸네일·내지·마지막 장별로 한 번에, 또는 장마다 따로 ──
+  const kindOfSlide = (s: Slide, i: number): LayoutKind => (i === 0 ? "cover" : s.fixedLast ? "last" : "inner");
+  const setSlideFont = (pick: (s: Slide, i: number) => boolean, fontId: string) =>
+    setSlides((prev) =>
+      prev.map((s, i) =>
+        pick(s, i) ? { ...s, fontOverride: fontId, blocks: s.blocks.map((b) => ({ ...b, fontId, weight: snapWeight(fontId, b.weight) })) } : s,
+      ),
+    );
+  const scaleSlide = (pick: (s: Slide, i: number) => boolean, step: number) =>
+    setSlides((prev) =>
+      prev.map((s, i) => {
+        if (!pick(s, i)) return s;
+        const cur = s.sizeScale ?? 1;
+        const next = Math.min(2, Math.max(0.5, Math.round((cur + step) * 10) / 10));
+        const k = next / cur;
+        return { ...s, sizeScale: next, blocks: s.blocks.map((b) => ({ ...b, size: Math.max(10, Math.round(b.size * k)) })) };
+      }),
+    );
+  const kindsHere = KINDS.filter((k) => slides.some((s, i) => kindOfSlide(s, i) === k));
+  const firstOf = (k: LayoutKind) => slides.find((s, i) => kindOfSlide(s, i) === k);
 
   const updateSlide = (i: number, patch: Partial<Slide>) => setSlides((prev) => prev.map((s, j) => (j === i ? { ...s, ...patch } : s)));
   const updateBlock = (i: number, id: string, patch: Partial<TextBlock>) =>
@@ -433,6 +456,27 @@ export default function Editor({ recipe, commerce, slides, captionBody, dmConten
         </section>
       </div>
 
+      <section className="card stack" style={{ marginTop: 20 }}>
+        <h2 style={{ margin: 0 }}>글꼴 · 글자 크기</h2>
+        <p className="muted small" style={{ margin: 0 }}>썸네일·내지·마지막 장마다 따로 정할 수 있어요. 한 장만 바꾸려면 아래 그 장 카드에서 바꾸세요.</p>
+        <div className="type-rows">
+          {kindsHere.map((k) => {
+            const pick = (s: Slide, i: number) => kindOfSlide(s, i) === k;
+            const first = firstOf(k);
+            const font = first?.fontOverride ?? first?.blocks.find((b) => b.role !== "handle")?.fontId ?? "Pretendard";
+            return (
+              <div className="type-row" key={k}>
+                <b className="type-row-label">{KIND_LABEL[k]}</b>
+                <div className="type-row-font">
+                  <FontPicker value={font} onChange={(f) => setSlideFont(pick, f)} sample={first?.blocks[0]?.text.split("\n")[0]} />
+                </div>
+                <SizeButtons scale={first?.sizeScale ?? 1} onScale={(f) => scaleSlide(pick, f)} />
+              </div>
+            );
+          })}
+        </div>
+      </section>
+
       <h2 style={{ marginTop: 40, marginBottom: 6 }}>③ 장마다 사진·글 고치기</h2>
       <p className="rail-hint">옆으로 밀어서 다음 장을 보세요 →</p>
       <div className="slide-rail">
@@ -478,6 +522,15 @@ export default function Editor({ recipe, commerce, slides, captionBody, dmConten
                     </optgroup>
                   ))}
                 </select>
+              </div>
+              <div className="slide-type">
+                <span className="field-label">이 장 글꼴 · 글자 크기</span>
+                <FontPicker
+                  value={s.fontOverride ?? s.blocks.find((b) => b.role !== "handle")?.fontId ?? "Pretendard"}
+                  onChange={(f) => setSlideFont((_, j) => j === i, f)}
+                  sample={s.blocks[0]?.text.split("\n")[0]}
+                />
+                <SizeButtons scale={s.sizeScale ?? 1} onScale={(f) => scaleSlide((_, j) => j === i, f)} />
               </div>
               {s.blocks.map((b) => {
                 const on = sel?.slide === i && sel.id === b.id;
@@ -681,6 +734,21 @@ export default function Editor({ recipe, commerce, slides, captionBody, dmConten
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+/** 글자 크기 줄이기·키우기 (10%씩, 50%~200%) — onScale에는 +0.1 / -0.1 */
+function SizeButtons({ scale, onScale }: { scale: number; onScale: (step: number) => void }) {
+  return (
+    <div className="size-btns">
+      <button type="button" className="btn btn-secondary btn-sm" onClick={() => onScale(-0.1)} disabled={scale <= 0.5} aria-label="글자 작게">
+        가<small>−</small>
+      </button>
+      <span className="size-val">{Math.round(scale * 100)}%</span>
+      <button type="button" className="btn btn-secondary btn-sm" onClick={() => onScale(0.1)} disabled={scale >= 2} aria-label="글자 크게">
+        가<b>+</b>
+      </button>
     </div>
   );
 }

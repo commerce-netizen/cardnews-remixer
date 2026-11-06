@@ -5,6 +5,7 @@ import { getLayout, roughFields, setField } from "./magazine";
 import { applyPage, lastSlide, type Combo, type PageSpec } from "./page-templates";
 import type { FillRequest, FillResult } from "./fill";
 import type { Slide } from "./types";
+import { snapWeight } from "./webfonts";
 
 /** 장 안의 글 전부 (칸 채우기 재료) */
 export function slideText(s: Slide): string {
@@ -62,7 +63,20 @@ export async function comboSlides(slides: Slide[], combo: Combo, handle: string,
 export function redraw(slide: Slide, spec: PageSpec | undefined, look: Look): Slide {
   if (!slide.layout || !slide.fields) return slide;
   const s = applyPage(slide, spec && spec.layout === slide.layout ? spec : { layout: slide.layout }, slide.fields, look);
-  return slide.fixedLast && !slide.image ? { ...s, photo: null } : s;
+  return withTypeOverrides(slide.fixedLast && !slide.image ? { ...s, photo: null } : s);
+}
+
+/** 장에 정해 둔 글꼴·글자 크기 배율을 글 상자들에 다시 입힌다 (다시 그려도 남게) */
+export function withTypeOverrides(s: Slide): Slide {
+  if (!s.fontOverride && (!s.sizeScale || s.sizeScale === 1)) return s;
+  return {
+    ...s,
+    blocks: s.blocks.map((b) => ({
+      ...b,
+      ...(s.fontOverride ? { fontId: s.fontOverride, weight: snapWeight(s.fontOverride, b.weight) } : {}),
+      ...(s.sizeScale && s.sizeScale !== 1 ? { size: Math.round(b.size * s.sizeScale) } : {}),
+    })),
+  };
 }
 
 /** 양식을 빼고 글 상자만 남긴 기본 장으로 */
