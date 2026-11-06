@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState, type Dispatch, type SetStateActio
 import { SlidePreview } from "./SlideCard";
 import TemplateManager from "./TemplateManager";
 import StylePanel from "./StylePanel";
-import { Range, Toggle } from "./controls";
+import { ColorField, Range, Toggle } from "./controls";
 import FontPicker from "./FontPicker";
 import { resizeImage } from "@/lib/client-images";
 import { IMAGE_GEN_ENABLED, makeAiPhoto } from "@/lib/slide-image";
@@ -40,6 +40,15 @@ import {
   type WatermarkStyle,
 } from "@/lib/templates";
 import type { Slide } from "@/lib/types";
+import { DEFAULT_ACCENT, KIND_LABEL, type LayoutKind } from "@/lib/magazine";
+import { dropLayout, fillSlide, kindFor, magazineSlides, redraw, slideText, syncField } from "@/lib/magazine-client";
+import { BUILTIN_PAGES, allPages, favFirst, loadFavorites, type PageTemplate } from "@/lib/page-templates";
+
+/** 포인트 색 고르기 보기 */
+const ACCENTS = ["#e5481c", "#2b6fff", "#0b4a8f", "#2fb79a", "#f2b705", "#d6336c", "#141414"];
+/** 장마다 '양식' 고르기에서 'AI가 골라 주기' */
+const AUTO_PICK = "__auto";
+const KINDS: LayoutKind[] = ["cover", "inner", "last"];
 
 type Props = {
   /** 음식·레시피 카드뉴스인지 (false = 정치·시사·패션 등 일반 → 캡션 CTA·고정 댓글·자동 DM 없음) */
@@ -83,6 +92,12 @@ export default function Editor({ recipe, commerce, slides, captionBody, dmConten
   const [saveName, setSaveName] = useState("");
   // AI 새 사진으로 바꾸기 전 사진 (되돌리기용)
   const [prevImages, setPrevImages] = useState<Record<number, string | null>>({});
+  // 매거진 레이아웃: 포인트 색, 양식을 새로 채우는 중인 장
+  const [accent, setAccent] = useState(DEFAULT_ACCENT);
+  const [layoutIndex, setLayoutIndex] = useState<number | null>(null);
+  // 장 템플릿 목록(내 템플릿 + 기본 제공)과 즐겨찾기 — 장마다 '이 장 템플릿' 고르기에 쓴다
+  const [pages, setPages] = useState<PageTemplate[]>(BUILTIN_PAGES);
+  const [fav, setFav] = useState<Set<string>>(new Set());
   const nodes = useRef<(HTMLDivElement | null)[]>([]);
   const editorRef = useRef<HTMLElement>(null);
   const resultBlobs = useRef<Blob[]>([]);
@@ -98,7 +113,15 @@ export default function Editor({ recipe, commerce, slides, captionBody, dmConten
   useEffect(() => {
     const list = allTemplates();
     setTemplates(list);
-    applyTemplate(findTemplate(list, loadActiveId()).id, list);
+    setPages(allPages());
+    setFav(loadFavorites());
+    // 슬라이드는 만들 때 이미 이 템플릿으로 그려졌다 — 모양·워터마크만 맞춘다
+    const t = findTemplate(list, loadActiveId());
+    setTemplateId(t.id);
+    setWatermark({ ...t.watermark });
+    setAdLabel(t.adLabel && commerce);
+    if (t.set) setAccent(t.set.accent);
+    else setSlides((prev) => prev.map((s) => (s.layout ? s : { ...s, blocks: applyTemplateToBlocks(s.blocks, t, true) })));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -129,20 +152,84 @@ export default function Editor({ recipe, commerce, slides, captionBody, dmConten
     setResults(null);
   };
 
-  /** 템플릿 고르기 — 모든 장의 글 상자에 역할별 모양(글꼴·크기·색·위치)을 입힌다 */
-  function applyTemplate(id: string, list: Template[] = templates) {
+  /** 기본(글 상자형) 장: 1번 장은 제목 상자, 2번 장부터 본문 상자 */
+  const classicBlocks = (i: number, text: string, t: Template) =>
+    i === 0 ? [newBlock("title", text, styleOf(t.styles.title))] : [newBlock("body", text, styleOf(t.styles.body))];
+
+  /**
+   * 템플릿 고르기.
+   * 글 상자형 = 모든 장의 글 상자에 역할별 모양(글꼴·크기·색·위치)을 입힌다.
+   * 매거진형 = 장마다 AI가 표지·속지·마지막 장 양식을 고르고 칸에 맞게 글을 다시 나눈다.
+   */
+  async function applyTemplate(id: string, list: Template[] = templates) {
     const t = findTemplate(list, id);
     setTemplateId(t.id);
     setResults(null);
     saveActiveId(t.id);
     setWatermark({ ...t.watermark });
     setAdLabel(t.adLabel && commerce);
-    setSlides((prev) => prev.map((s) => ({ ...s, blocks: applyTemplateToBlocks(s.blocks, t, true) })));
+    if (t.set) {
+      setAccent(t.set.accent);
+      setBusy("템플릿에 맞게 글을 나누는 중…");
+      try {
+        const next = await magazineSlides(slides, t.set, t.watermark.text, (i) => !!(slides[i].image || slides[i].sourceImage));
+        setSlides(() => next);
+      } finally {
+        setBusy(null);
+      }
+      return;
+    }
+    setSlides((prev) =>
+      prev.map((s, i) =>
+        s.layout
+          ? { ...dropLayout(s), blocks: classicBlocks(i, slideText(s), t) }
+          : { ...s, blocks: applyTemplateToBlocks(s.blocks, t, true) },
+      ),
+    );
   }
+
+  /** 한 장의 템플릿 바꾸기 — AI가 그 장 글을 새 템플릿 칸에 맞게 다시 나눈다 */
+  async function changeLayout(i: number, id: string) {
+    const s = slides[i];
+    setError(null);
+    if (!id) {
+      setSlides((prev) => prev.map((x, j) => (j === i ? { ...dropLayout(x), blocks: classicBlocks(i, slideText(x), template) } : x)));
+      return;
+    }
+    setLayoutIndex(i);
+    try {
+      const kind = kindFor(i, slides.length);
+      const cands = id === AUTO_PICK ? BUILTIN_PAGES.filter((p) => p.kind === kind) : pages.filter((p) => p.id === id);
+      const next = await fillSlide(s, cands, { accent, handle: watermark.text }, {
+        context: slides.map((x, j) => `[${j + 1}장] ${slideText(x)}`).join("\n"),
+        hasPhoto: !!(s.image || s.sourceImage),
+      });
+      setSlides((prev) => prev.map((x, j) => (j === i ? next : x)));
+      setSel(null);
+    } catch (e) {
+      setError(`${i + 1}번 장: ${(e as Error).message}`);
+    } finally {
+      setLayoutIndex(null);
+    }
+  }
+
+  /** 포인트 색 바꾸기 — AI 없이 다시 그린다 */
+  const changeAccent = (v: string) => {
+    setAccent(v);
+    setSlides((prev) => prev.map((s) => redraw(s, { accent: v, handle: watermark.text })));
+  };
+  const hasLayout = slides.some((s) => s.layout);
 
   const updateSlide = (i: number, patch: Partial<Slide>) => setSlides((prev) => prev.map((s, j) => (j === i ? { ...s, ...patch } : s)));
   const updateBlock = (i: number, id: string, patch: Partial<TextBlock>) =>
-    setSlides((prev) => prev.map((s, j) => (j === i ? { ...s, blocks: s.blocks.map((b) => (b.id === id ? { ...b, ...patch } : b)) } : s)));
+    setSlides((prev) =>
+      prev.map((s, j) => {
+        if (j !== i) return s;
+        const next = { ...s, blocks: s.blocks.map((b) => (b.id === id ? { ...b, ...patch } : b)) };
+        // 매거진 장: 고친 글을 칸 값에도 넣어 둔다 (색만 바꿔 다시 그려도 남게)
+        return patch.text !== undefined ? syncField(next, id, patch.text) : next;
+      }),
+    );
 
   const addBlock = (i: number) => {
     const role: TextRole = i === 0 ? "title" : "body";
@@ -313,6 +400,7 @@ export default function Editor({ recipe, commerce, slides, captionBody, dmConten
               ))}
             </select>
           </div>
+          {hasLayout && <ColorField label="포인트 색 (띠·번호·강조)" value={accent} presets={ACCENTS} onChange={changeAccent} />}
           <button className="btn btn-secondary btn-block" onClick={() => setShowTemplates(true)}>
             🎨 템플릿 만들기 · 고치기
           </button>
@@ -362,7 +450,12 @@ export default function Editor({ recipe, commerce, slides, captionBody, dmConten
               onSelect={(id) => setSel(id ? { slide: i, id } : null)}
               onMoveBlock={(id, patch) => updateBlock(i, id, patch)}
               overlay={
-                genIndex === i && (
+                layoutIndex === i ? (
+                  <div className="preview-overlay" role="status">
+                    <div className="spinner" />
+                    <p>템플릿에 맞게 글을 나누는 중이에요</p>
+                  </div>
+                ) : genIndex === i && (
                   <div className="preview-overlay" role="status">
                     <div className="spinner" />
                     <p>AI가 새 사진을 만드는 중이에요<br />1~2분쯤 걸려요</p>
@@ -372,6 +465,27 @@ export default function Editor({ recipe, commerce, slides, captionBody, dmConten
             />
 
             <div className="stack" style={{ marginTop: 20 }}>
+              <div>
+                <label className="field-label" htmlFor={`layout-${i}`}>이 장 템플릿</label>
+                <select
+                  id={`layout-${i}`}
+                  value={s.page ?? s.layout ?? ""}
+                  disabled={layoutIndex !== null || !!busy}
+                  onChange={(e) => changeLayout(i, e.target.value)}
+                >
+                  <option value="">글 상자만 (기본)</option>
+                  <option value={AUTO_PICK}>✨ AI가 내용에 맞게 골라 주기</option>
+                  {KINDS.map((k) => (
+                    <optgroup key={k} label={KIND_LABEL[k]}>
+                      {favFirst(pages.filter((p) => p.kind === k), fav).map((p) => (
+                        <option key={p.id} value={p.id}>
+                          {fav.has(p.id) ? "♥ " : ""}{p.name}{p.builtin ? "" : " (내 템플릿)"}
+                        </option>
+                      ))}
+                    </optgroup>
+                  ))}
+                </select>
+              </div>
               {s.blocks.map((b) => {
                 const on = sel?.slide === i && sel.id === b.id;
                 return (
@@ -571,7 +685,11 @@ export default function Editor({ recipe, commerce, slides, captionBody, dmConten
         <div className="overlay-page">
           <div className="page">
             <TemplateManager
-              onClose={() => setShowTemplates(false)}
+              onClose={() => {
+                setShowTemplates(false);
+                setPages(allPages());
+                setFav(loadFavorites());
+              }}
               onPick={(id) => {
                 const list = allTemplates();
                 setTemplates(list);

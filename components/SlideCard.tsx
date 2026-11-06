@@ -15,6 +15,7 @@ import { fontStack, snapWeight } from "@/lib/webfonts";
 import { SLIDE_W, rgba, slideHeight, type BlockStyle, type TextBlock } from "@/lib/layout";
 import type { WatermarkStyle } from "@/lib/templates";
 import type { Slide } from "@/lib/types";
+import type { Shape } from "@/lib/magazine";
 
 export { SLIDE_W };
 /** 레시피 모드 기본: 인스타그램 세로 피드 4:5 */
@@ -120,6 +121,36 @@ function Block({ b, height, text, tick }: { b: TextBlock; height: number; text: 
   );
 }
 
+/** 매거진 레이아웃 도형 (띠·박스·선·체크칸·동그란 프로필) */
+function ShapeEl({ s, height }: { s: Shape; height: number }) {
+  const base: CSSProperties = {
+    position: "absolute",
+    left: `${s.x}%`,
+    top: `${s.y}%`,
+    width: `${s.w}%`,
+    height: `${s.h}%`,
+    boxSizing: "border-box",
+    background: s.fill,
+    border: s.border ? `${s.bw ?? 2}px solid ${s.border}` : undefined,
+    borderRadius: s.kind === "avatar" ? "50%" : s.radius ?? 0,
+  };
+  if (s.kind !== "avatar") return <div style={base} />;
+  return (
+    <div
+      style={{
+        ...base,
+        display: "grid",
+        placeItems: "center",
+        color: "#ffffff",
+        fontFamily: SMALL_FONT,
+        fontWeight: 800,
+      }}
+    >
+      <span style={{ fontSize: Math.round((s.h / 100) * height * 0.46), lineHeight: 1 }}>{s.text}</span>
+    </div>
+  );
+}
+
 type CanvasProps = { slide: Slide; watermark: WatermarkStyle; adLabel: boolean };
 
 /** 실제 크기(1080×높이)로 그리는 슬라이드. PNG 저장 시 이 요소를 그대로 캡처한다. */
@@ -130,6 +161,11 @@ export const SlideCanvas = forwardRef<HTMLDivElement, CanvasProps>(function Slid
   const hasHandle = slide.blocks.some((b) => b.role === "handle");
   const wmTop = watermark.pos === "top-left";
 
+  const magazine = !!slide.layout;
+  const darkInk = slide.ink === "dark";
+  const photo = slide.photo;
+  const pr = photo ?? { x: 0, y: 0, w: 100, h: 100 };
+
   return (
     <div
       ref={ref}
@@ -138,17 +174,49 @@ export const SlideCanvas = forwardRef<HTMLDivElement, CanvasProps>(function Slid
         height,
         position: "relative",
         overflow: "hidden",
-        background: slide.image ? "#222" : slide.bg || "linear-gradient(160deg, #4a4a4a, #1f1f1f)",
+        background: magazine
+          ? slide.bg
+          : slide.image ? "#222" : slide.bg || "linear-gradient(160deg, #4a4a4a, #1f1f1f)",
       }}
     >
-      {slide.image && (
+      {photo !== null && slide.image && (
         <img
           src={slide.image}
           alt=""
           crossOrigin="anonymous"
-          style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", display: "block" }}
+          style={{
+            position: "absolute",
+            left: `${pr.x}%`,
+            top: `${pr.y}%`,
+            width: `${pr.w}%`,
+            height: `${pr.h}%`,
+            objectFit: "cover",
+            display: "block",
+          }}
         />
       )}
+      {/* 매거진 레이아웃의 사진 칸이 비어 있으면 자리 표시 */}
+      {magazine && photo !== null && !slide.image && (
+        <div
+          style={{
+            position: "absolute",
+            left: `${pr.x}%`,
+            top: `${pr.y}%`,
+            width: `${pr.w}%`,
+            height: `${pr.h}%`,
+            background: darkInk ? "#dcdcdc" : "#3a3a3a",
+            display: "grid",
+            placeItems: "center",
+            color: darkInk ? "#8a8a8a" : "#8f8f8f",
+            fontFamily: SMALL_FONT,
+            fontSize: 30,
+          }}
+        >
+          사진 자리
+        </div>
+      )}
+
+      {slide.shapes?.map((sh, i) => <ShapeEl key={i} s={sh} height={height} />)}
 
       {slide.blocks.map((b) => {
         // 계정 이름 자리에는 내 워터마크 문구가 들어간다
@@ -167,8 +235,8 @@ export const SlideCanvas = forwardRef<HTMLDivElement, CanvasProps>(function Slid
             fontFamily: SMALL_FONT,
             fontSize: 30,
             lineHeight: 1.2,
-            color: "rgba(255, 255, 255, 0.72)",
-            textShadow: "0 1px 3px rgba(0,0,0,0.25)",
+            color: darkInk ? "rgba(20, 20, 20, 0.6)" : "rgba(255, 255, 255, 0.72)",
+            textShadow: darkInk ? "none" : "0 1px 3px rgba(0,0,0,0.25)",
           }}
         >
           [광고]
@@ -187,8 +255,8 @@ export const SlideCanvas = forwardRef<HTMLDivElement, CanvasProps>(function Slid
             fontFamily: fontStack(watermark.fontId),
             fontSize: watermark.size || 31,
             lineHeight: 1.3,
-            color: rgba(watermark.color, watermark.opacity),
-            textShadow: "0 1px 3px rgba(0,0,0,0.2)",
+            color: darkInk ? rgba("#141414", Math.min(80, watermark.opacity)) : rgba(watermark.color, watermark.opacity),
+            textShadow: darkInk ? "none" : "0 1px 3px rgba(0,0,0,0.2)",
           }}
         >
           {wm}

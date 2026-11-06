@@ -8,6 +8,7 @@ import { IMAGE_GEN_ENABLED, makeAiPhoto } from "@/lib/slide-image";
 import type { DmContent } from "@/lib/dm";
 import { SLIDE_W, newBlock, styleOf } from "@/lib/layout";
 import { allTemplates, findTemplate, loadActiveId } from "@/lib/templates";
+import { magazineSlides } from "@/lib/magazine-client";
 import type { ExtractResult, RemixRequest, RemixResult, Slide } from "@/lib/types";
 
 
@@ -93,30 +94,41 @@ export default function Home() {
         });
 
     try {
-      const [r, aiImages] = await Promise.all([
-        postJson<RemixResult>("/api/remix", src.request),
-        photos
-          ? Promise.all(src.images.map((img, i) => (img ? makePhoto(img, i) : Promise.resolve(null))))
-          : Promise.resolve([] as (string | null)[]),
-      ]);
-
-      const n = Math.max(r.slides.length, src.images.length);
-      setSlides(
-        Array.from({ length: n }, (_, i) => {
+      // 글 각색 → (매거진 템플릿이면) 장마다 양식 칸 채우기. 사진 만들기와 동시에 진행된다
+      const tpl = findTemplate(allTemplates(), loadActiveId());
+      const textP = postJson<RemixResult>("/api/remix", src.request).then(async (r) => {
+        const n = Math.max(r.slides.length, src.images.length);
+        const base: Slide[] = Array.from({ length: n }, (_, i) => {
           const title = r.slides[i]?.title?.trim() ?? "";
           const body = r.slides[i]?.body?.trim() ?? "";
-          const origin = src.images[i] ?? null;
           // 디자인 틀: 1번 장은 제목만, 2번 장부터는 본문만 보인다. AI가 칸을 잘못 채워도 글이 사라지지 않게 합친다.
           return {
-            // 결과물엔 AI가 새로 만든 사진만 쓴다. 원본은 'AI 새 사진' 재료로만 보관
-            image: keepImages ? (keepImages[i] ?? null) : (aiImages[i] ?? (IMAGE_GEN_ENABLED ? null : origin)),
-            sourceImage: origin,
+            image: null,
+            sourceImage: src.images[i] ?? null,
             original: r.slides[i]?.original ?? "",
             ratio: 1.25,
             bg: "",
             blocks: recipeBlocks(i, i === 0 ? title || body : title, i === 0 ? body : body || title),
           };
-        }),
+        });
+        const built = tpl.set
+          ? await magazineSlides(base, tpl.set, tpl.watermark.text, (i) => !!src.images[i])
+          : base;
+        return { r, built };
+      });
+      const [{ r, built }, aiImages] = await Promise.all([
+        textP,
+        photos
+          ? Promise.all(src.images.map((img, i) => (img ? makePhoto(img, i) : Promise.resolve(null))))
+          : Promise.resolve([] as (string | null)[]),
+      ]);
+
+      setSlides(
+        built.map((sl, i) => ({
+          ...sl,
+          // 결과물엔 AI가 새로 만든 사진만 쓴다. 원본은 'AI 새 사진' 재료로만 보관
+          image: keepImages ? (keepImages[i] ?? null) : (aiImages[i] ?? (IMAGE_GEN_ENABLED ? null : (src.images[i] ?? null))),
+        })),
       );
       setCaption(r.caption);
       setDmContent(r.dm ?? null);

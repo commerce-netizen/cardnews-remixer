@@ -1,5 +1,6 @@
 import type { DmContent } from "./dm";
 import type { TextBlock } from "./layout";
+import type { Fields, Rect, Shape } from "./magazine";
 
 export type Slide = {
   /** 화면에 표시할 이미지 주소 (프록시 URL 또는 data URL). 없으면 글자만 있는 슬라이드 */
@@ -14,6 +15,18 @@ export type Slide = {
   bg: string;
   /** 사진 위에 얹는 글 상자들 */
   blocks: TextBlock[];
+  /** 장 템플릿 id (썸네일·내지·마지막 장 — lib/page-templates.ts) */
+  page?: string;
+  /** 양식 id (없으면 글 상자만 있는 기본 장) */
+  layout?: string;
+  /** 매거진 레이아웃 칸 값 (색만 바꿀 때 AI 없이 다시 그리는 데 씀) */
+  fields?: Fields;
+  /** 사진 자리 (undefined = 꽉 차게, null = 사진 안 씀) */
+  photo?: Rect | null;
+  /** 띠·박스·선·프로필 같은 도형 */
+  shapes?: Shape[];
+  /** 바탕이 밝으면 dark — 워터마크·[광고]를 어두운 글씨로 */
+  ink?: "light" | "dark";
 };
 
 export type ExtractResult = {
