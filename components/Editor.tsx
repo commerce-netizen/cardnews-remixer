@@ -5,7 +5,7 @@ import { SlidePreview } from "./SlideCard";
 import { Toggle } from "./controls";
 import { resizeImage } from "@/lib/client-images";
 import { IMAGE_GEN_ENABLED, makeAiPhoto } from "@/lib/slide-image";
-import { downloadZip, renderSlides, triggerDownload } from "@/lib/export";
+import { deviceKind, downloadZip, renderSlides, saveToGallery, triggerDownload } from "@/lib/export";
 import { DISCLOSURE, buildCaption } from "@/lib/caption";
 import { buildDm, type DmContent } from "@/lib/dm";
 import { loadFonts } from "@/lib/webfonts";
@@ -207,16 +207,79 @@ export default function Editor({ recipe, commerce, slides, captionBody, dmConten
     }
   };
 
-  const approve = async () => {
+  const device = typeof window === "undefined" ? "desktop" : deviceKind();
+  const [saved, setSaved] = useState(false);
+  const saveAgain = async () => {
     setError(null);
+    try {
+      const r = await saveToGallery(resultBlobs.current);
+      if (r !== "cancelled") setSaved(true);
+    } catch {
+      setError("사진 저장 창을 열지 못했어요. 아래 사진을 길게 눌러 '사진 앱에 저장'으로 저장해 주세요.");
+    }
+  };
+
+  /**
+   * 휴대폰: 화면을 보는 동안 완성 사진을 미리 만들어 둔다.
+   * 그래야 '내려받기'를 누른 그 순간 바로 저장(아이폰은 저장 창)이 열린다 — 누른 뒤 사진을 만들면
+   * 아이폰은 '누른 순간'이 지나 저장 창을 못 연다.
+   */
+  const pre = useRef<{ version: number; blobs: Blob[] | null }>({ version: 0, blobs: null });
+  useEffect(() => {
+    if (device === "desktop") return;
+    const v = ++pre.current.version;
+    pre.current.blobs = null;
+    const t = setTimeout(async () => {
+      try {
+        await loadFonts(JSON.parse(fontKey));
+        const els = nodes.current.slice(0, slides.length).filter((n): n is HTMLDivElement => !!n);
+        if (els.length !== slides.length || genIndex !== null) return;
+        const blobs = await renderSlides(els);
+        if (pre.current.version === v) pre.current.blobs = blobs;
+      } catch {
+        /* 미리 못 만들면 누를 때 만든다 */
+      }
+    }, 1200);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [slides, watermark, adLabel, genIndex, fontKey]);
+
+  const showResults = (blobs: Blob[]) => {
+    resultBlobs.current = blobs;
+    setResults(blobs.map((b) => URL.createObjectURL(b)));
+  };
+
+  const approve = async () => {
+    setSaved(false);
+    setError(null);
+    // 휴대폰 + 미리 만들어 둔 사진이 있으면: 기다림 없이 바로 사진 앱·갤러리로
+    const ready = device !== "desktop" ? pre.current.blobs : null;
+    if (ready) {
+      showResults(ready);
+      try {
+        const r = await saveToGallery(ready);
+        if (r !== "cancelled") setSaved(true);
+      } catch {
+        setError("사진 저장 창을 열지 못했어요. 아래 초록 버튼을 다시 눌러 주세요.");
+      }
+      setTimeout(() => document.getElementById("result-card")?.scrollIntoView({ behavior: "smooth", block: "start" }), 100);
+      return;
+    }
     setBusy(`완성본 만드는 중… (0 / ${slides.length}장)`);
     try {
       await loadFonts(JSON.parse(fontKey));
       const els = nodes.current.slice(0, slides.length).filter((n): n is HTMLDivElement => !!n);
       const blobs = await renderSlides(els, (d) => setBusy(`완성본 만드는 중… (${d} / ${slides.length}장)`));
-      resultBlobs.current = blobs;
-      setResults(blobs.map((b) => URL.createObjectURL(b)));
-      await downloadZip(blobs, caption, pinned, dm);
+      showResults(blobs);
+      if (device === "desktop") {
+        await downloadZip(blobs, caption, pinned, dm);
+      } else if (device === "android") {
+        // 갤럭시: 압축 파일 대신 사진을 한 장씩 → 갤러리 'Download' 앨범
+        await saveToGallery(blobs);
+        setSaved(true);
+      }
+      // 아이폰에서 아직 미리 못 만들었을 때만: 아래 '사진 앱에 저장' 버튼을 한 번 더
+      setTimeout(() => document.getElementById("result-card")?.scrollIntoView({ behavior: "smooth", block: "start" }), 100);
     } catch (e) {
       console.error(e);
       setError("완성본을 만들다 문제가 생겼어요. 사진을 바꾸거나 다시 눌러 주세요.");
@@ -380,12 +443,28 @@ export default function Editor({ recipe, commerce, slides, captionBody, dmConten
       </div>
 
       {results && (
-        <section className="card" style={{ borderColor: "var(--ok)" }}>
+        <section className="card" id="result-card" style={{ borderColor: "var(--ok)" }}>
           <h2>완성! 🎉</h2>
-          <p>
-            컴퓨터에는 <b>압축 파일(zip)</b>로 저장됐어요. 사진과 함께 <b>캡션{recipe ? "·고정 댓글·자동 DM" : ""} 글</b>도 들어 있어요. 휴대폰에서는 아래 사진을 <b>길게 눌러 저장</b>하거나 저장 버튼을 누르세요.
-          </p>
-          <div className="thumbs">
+          {device === "desktop" ? (
+            <p>
+              <b>압축 파일(zip)</b>로 저장됐어요. 사진 {results.length}장과 함께 <b>캡션{recipe ? "·고정 댓글·자동 DM" : ""} 글</b>도 들어 있어요.
+            </p>
+          ) : (
+            <>
+              <button className="btn btn-ok btn-huge btn-block" onClick={saveAgain}>
+                📲 사진 {results.length}장 {device === "ios" ? "사진 앱에" : "갤러리에"} 저장하기
+              </button>
+              <p className="muted small" style={{ margin: "12px 0 0" }}>
+                {device === "ios"
+                  ? <>누르면 공유 창이 떠요. <b>&lsquo;이미지 {results.length}개 저장&rsquo;</b>을 누르면 사진 앱에 한 번에 들어가요.</>
+                  : saved
+                    ? <>갤러리 앱의 <b>&lsquo;Download&rsquo;(다운로드) 앨범</b>에 {results.length}장이 저장됐어요. 안 보이면 위 버튼을 다시 눌러 주세요.</>
+                    : <>누르면 사진이 한 장씩 저장돼요. 갤러리 앱의 <b>&lsquo;Download&rsquo;</b> 앨범에서 보여요.</>}
+                {" "}캡션{recipe ? "·고정 댓글·DM" : ""}은 위 <b>복사하기</b> 버튼으로 옮기세요.
+              </p>
+            </>
+          )}
+          <div className="thumbs" style={{ marginTop: 16 }}>
             {results.map((u, i) => (
               <button
                 key={u}
@@ -410,7 +489,7 @@ export default function Editor({ recipe, commerce, slides, captionBody, dmConten
       <div className="approve-bar">
         <div className="inner">
           <button className="btn btn-ok btn-huge" onClick={approve} disabled={!!busy || genIndex !== null}>
-            {busy ?? "✅ 승인하고 내려받기"}
+            {busy ?? (device === "desktop" ? "✅ 승인하고 내려받기" : device === "ios" ? "✅ 사진 앱에 저장하기" : "✅ 갤러리에 저장하기")}
           </button>
         </div>
       </div>
