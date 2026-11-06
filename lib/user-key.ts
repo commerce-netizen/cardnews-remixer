@@ -3,7 +3,7 @@ import { hasApiKey, isMockMode } from "./openai";
 import { unseal } from "./secret-box";
 import { AUTH_ENABLED } from "./supabase/env";
 import { currentUser, supabaseAdmin } from "./supabase/server";
-import { BlockedError, NeedCodeError, requireMember } from "./members";
+import { BlockedError, NeedCodeError, isAdmin, requireMember } from "./members";
 
 export class NeedLoginError extends UserFacingError {}
 export class NeedKeyError extends UserFacingError {}
@@ -24,7 +24,11 @@ export async function requestApiKey(): Promise<string> {
   if (!user) throw new NeedLoginError("로그인이 필요해요. 오른쪽 위 '로그인'을 눌러 주세요.");
   await requireMember(user);
   const { data } = await supabaseAdmin().from("user_secrets").select("openai_key_enc").eq("user_id", user.id).maybeSingle();
-  if (!data?.openai_key_enc) throw new NeedKeyError("마이페이지에서 내 OpenAI API 키를 먼저 넣어 주세요.");
+  if (!data?.openai_key_enc) {
+    // 관리자는 따로 넣지 않아도 서버에 넣어 둔 운영자 키(OPENAI_API_KEY)를 쓴다
+    if (isAdmin(user) && hasApiKey()) return process.env.OPENAI_API_KEY!;
+    throw new NeedKeyError("마이페이지에서 내 OpenAI API 키를 먼저 넣어 주세요.");
+  }
   try {
     return unseal(data.openai_key_enc);
   } catch {
