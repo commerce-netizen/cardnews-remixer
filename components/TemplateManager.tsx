@@ -26,6 +26,21 @@ import {
   type WatermarkStyle,
 } from "@/lib/templates";
 import type { Slide } from "@/lib/types";
+import { KIND_LABEL, layoutsOf, type LayoutKind } from "@/lib/magazine";
+import { AUTO, DEFAULT_SET, sampleLayoutSlide, type LayoutSet } from "@/lib/magazine-client";
+
+const ACCENTS = ["#e5481c", "#2b6fff", "#0b4a8f", "#2fb79a", "#f2b705", "#d6336c", "#141414"];
+/** 매거진 양식 미리보기에 쓰는 글꼴 */
+const MAG_FONTS = [500, 700, 800].map((w) => ({ id: "Pretendard", w })).concat([{ id: "NanumMyeongjo", w: 400 }]);
+/** 속지 '자동'일 때 미리보기로 보여 줄 양식 */
+const AUTO_SAMPLE = "numbered-list";
+
+/** 매거진 템플릿 보기 슬라이드 (표지·속지·마지막 장) */
+function setSample(t: Template, kind: LayoutKind): Slide {
+  const set = t.set ?? DEFAULT_SET;
+  const id = set[kind] === AUTO ? AUTO_SAMPLE : set[kind];
+  return sampleLayoutSlide(id, { accent: set.accent, handle: t.watermark.text || "@my_account" });
+}
 
 type Side = "cover" | "body";
 const SIDE_LABEL: Record<Side, string> = { cover: "표지 (1번 장)", body: "내지 (2번 장부터)" };
@@ -98,8 +113,9 @@ export default function TemplateManager({ onClose, onPick }: Props) {
   // 목록·편집 중인 템플릿이 쓰는 글꼴을 미리 내려받아 미리보기가 제대로 보이게
   const shown = useMemo(() => (draft ? [draft] : templates), [draft, templates]);
   useEffect(() => {
-    loadFonts(shown.flatMap(templateFontIds));
+    loadFonts([...shown.flatMap(templateFontIds), ...MAG_FONTS]);
   }, [shown]);
+  const [kind, setKind] = useState<LayoutKind>("cover");
 
   const say = (msg: string) => {
     setToast(msg);
@@ -179,6 +195,8 @@ export default function TemplateManager({ onClose, onPick }: Props) {
     setDraft((d) => (d ? { ...d, caption: { ...d.caption, ...p } } : d));
   const patchDm = (p: Partial<DmStyle>) =>
     setDraft((d) => (d ? { ...d, dm: { ...d.dm, ...p } } : d));
+  const patchSet = (p: Partial<LayoutSet>) =>
+    setDraft((d) => (d ? { ...d, set: { ...(d.set ?? DEFAULT_SET), ...p } } : d));
 
   // ── 편집 화면 ───────────────────────────────────────────────
   if (draft) {
@@ -194,6 +212,21 @@ export default function TemplateManager({ onClose, onPick }: Props) {
         <div className="split">
           {/* 왼쪽: 바뀌는 걸 바로 보는 미리보기 (PC는 화면에 고정, 모바일은 위에 붙음) */}
           <div className="sticky">
+            {draft.set ? (
+              <>
+                <div className="seg seg-big" role="tablist" aria-label="표지·속지·마지막 장 고르기">
+                  {(["cover", "inner", "last"] as LayoutKind[]).map((k) => (
+                    <button key={k} role="tab" aria-selected={kind === k} className={kind === k ? "on" : ""} onClick={() => setKind(k)}>
+                      {KIND_LABEL[k]}
+                    </button>
+                  ))}
+                </div>
+                <section className="card">
+                  <SlidePreview slide={setSample(draft, kind)} watermark={draft.watermark} adLabel={draft.adLabel} />
+                </section>
+              </>
+            ) : (
+            <>
             <div className="seg seg-big" role="tablist" aria-label="표지와 내지 고르기">
               {(["cover", "body"] as Side[]).map((sd) => (
                 <button key={sd} role="tab" aria-selected={side === sd} className={side === sd ? "on" : ""} onClick={() => setSide(sd)}>
@@ -211,6 +244,8 @@ export default function TemplateManager({ onClose, onPick }: Props) {
                 onMoveBlock={(id, p) => patch(id.replace("sample-", "") as TextRole, p)}
               />
             </section>
+            </>
+            )}
           </div>
 
           {/* 오른쪽: 설정 */}
@@ -228,6 +263,65 @@ export default function TemplateManager({ onClose, onPick }: Props) {
           </div>
         </section>
 
+        <section className="card stack">
+          <h2 style={{ margin: 0 }}>만드는 방식</h2>
+          <div className="seg seg-big" role="tablist" aria-label="만드는 방식">
+            <button role="tab" aria-selected={!draft.set} className={!draft.set ? "on" : ""} onClick={() => setDraft({ ...draft, set: undefined })}>
+              글 상자형
+            </button>
+            <button role="tab" aria-selected={!!draft.set} className={draft.set ? "on" : ""} onClick={() => patchSet({})}>
+              매거진 양식
+            </button>
+          </div>
+          <p className="muted small" style={{ margin: 0 }}>
+            {draft.set
+              ? "표지·속지·마지막 장 양식을 고르면, AI가 장마다 글을 양식 칸(목록·표·순위…)에 맞게 나눠 써요."
+              : "사진 위에 제목·본문 글 상자를 얹는 방식이에요. 글 모양을 역할별로 정해요."}
+          </p>
+        </section>
+
+        {draft.set && (
+          <section className="card stack">
+            <h2 style={{ margin: 0 }}>양식 고르기</h2>
+            <div className="seg" role="tablist" aria-label="어느 장 양식을 고를지">
+              {(["cover", "inner", "last"] as LayoutKind[]).map((k) => (
+                <button key={k} role="tab" aria-selected={kind === k} className={kind === k ? "on" : ""} onClick={() => setKind(k)}>
+                  {KIND_LABEL[k]}
+                </button>
+              ))}
+            </div>
+            <div className="layout-grid">
+              {kind === "inner" && (
+                <button
+                  className={`layout-pick${draft.set.inner === AUTO ? " on" : ""}`}
+                  onClick={() => patchSet({ inner: AUTO })}
+                >
+                  <div className="layout-auto">✨<br />AI가 장마다<br />골라 줘요</div>
+                  <b>자동 (추천)</b>
+                  <span>내용이 목록이면 목록, 비교면 비교표…</span>
+                </button>
+              )}
+              {layoutsOf(kind).map((l) => (
+                <button
+                  key={l.id}
+                  className={`layout-pick${draft.set![kind] === l.id ? " on" : ""}`}
+                  onClick={() => patchSet({ [kind]: l.id } as Partial<LayoutSet>)}
+                >
+                  <SlidePreview
+                    slide={sampleLayoutSlide(l.id, { accent: draft.set!.accent, handle: draft.watermark.text || "@my_account" })}
+                    watermark={draft.watermark}
+                    adLabel={false}
+                  />
+                  <b>{l.name}</b>
+                  <span>{l.desc}</span>
+                </button>
+              ))}
+            </div>
+            <ColorField label="포인트 색 (띠·번호·강조)" value={draft.set.accent} presets={ACCENTS} onChange={(accent) => patchSet({ accent })} />
+          </section>
+        )}
+
+        {!draft.set && (
         <section className="card stack">
           <h2 style={{ margin: 0 }}>글 모양 (역할별)</h2>
           <div className="seg seg-wrap" role="tablist" aria-label="역할 고르기">
@@ -263,6 +357,7 @@ export default function TemplateManager({ onClose, onPick }: Props) {
           </p>
           <StylePanel style={st} sample={SAMPLE_TEXT[role].split("\n")[0]} onChange={(p) => patch(role, p)} />
         </section>
+        )}
 
         <section className="card stack">
           <h2 style={{ margin: 0 }}>워터마크 (모든 장 공통)</h2>
@@ -400,7 +495,7 @@ export default function TemplateManager({ onClose, onPick }: Props) {
     <div>
       <h1>디자인 템플릿</h1>
       <p className="lead">
-        제목·본문 같은 역할마다 글꼴·굵기·크기·색·위치·글상자를 미리 정해 두고, 카드뉴스를 만들 때 골라 쓰세요.
+        매거진 양식(표지·속지·마지막 장)이나 글 상자 모양을 정해 두고, 사진 콘텐츠를 만들 때 골라 쓰세요.
       </p>
 
       {toast && <div className="notice notice-info" role="status">{toast}</div>}
@@ -413,8 +508,17 @@ export default function TemplateManager({ onClose, onPick }: Props) {
               {activeId === t.id && <span className="badge">지금 쓰는 중</span>}
             </div>
             <div className="tpl-shots">
-              <SlidePreview slide={sampleSlide(t, "cover")} watermark={t.watermark} adLabel={t.adLabel} />
-              <SlidePreview slide={sampleSlide(t, "body")} watermark={t.watermark} adLabel={t.adLabel} />
+              {t.set ? (
+                <>
+                  <SlidePreview slide={setSample(t, "cover")} watermark={t.watermark} adLabel={t.adLabel} />
+                  <SlidePreview slide={setSample(t, "inner")} watermark={t.watermark} adLabel={t.adLabel} />
+                </>
+              ) : (
+                <>
+                  <SlidePreview slide={sampleSlide(t, "cover")} watermark={t.watermark} adLabel={t.adLabel} />
+                  <SlidePreview slide={sampleSlide(t, "body")} watermark={t.watermark} adLabel={t.adLabel} />
+                </>
+              )}
             </div>
             <div className="row" style={{ marginTop: 18 }}>
               <button className="btn btn-primary" onClick={() => use(t.id)} disabled={activeId === t.id}>
