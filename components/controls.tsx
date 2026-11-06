@@ -37,16 +37,28 @@ export function ColorField({
   value,
   presets = TEXT_COLORS,
   onChange,
+  allowNone = false,
 }: {
   label: string;
   value: string;
   presets?: string[];
   onChange: (v: string) => void;
+  /** 맨 앞에 'X(없음)' 칸 — 고르면 빈 문자열 */
+  allowNone?: boolean;
 }) {
   return (
     <div>
       <span className="field-label">{label}</span>
       <div className="swatches">
+        {allowNone && (
+          <button
+            type="button"
+            className={`swatch swatch-none${!value ? " on" : ""}`}
+            onClick={() => onChange("")}
+            aria-label="없음"
+            title="없음"
+          />
+        )}
         {presets.map((c) => (
           <button
             key={c}

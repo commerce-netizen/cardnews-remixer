@@ -76,8 +76,10 @@ export type BlockStyle = {
   /** 글자 그림자 */
   shadow: boolean;
   shadowColor: string;
-  /** 강조 낱말 색 */
+  /** 강조 줄 색 (빈 문자열 = 강조 안 함) */
   accentColor: string;
+  /** 강조 색을 입힐 줄 번호들 (1부터, 줄바꿈 기준). 비우면 강조 없음 — 템플릿에도 저장된다 */
+  accentLines: number[];
 };
 
 export type TextBlock = BlockStyle & {
@@ -87,8 +89,6 @@ export type TextBlock = BlockStyle & {
   original: string;
   /** 지금 글 (줄바꿈 포함) */
   text: string;
-  /** 다른 색으로 강조할 낱말 (없으면 빈 문자열) */
-  accent: string;
   /** 양식 안에서 이 글 상자의 고정 이름표 (내 템플릿에서 고친 모양을 다시 입힐 때) */
   slot?: string;
   /** 양식: 이 글이 들어가는 칸 주소 (예: "title", "items.2") */
@@ -103,7 +103,7 @@ export type TextBlock = BlockStyle & {
 export const STYLE_KEYS: (keyof BlockStyle)[] = [
   "fontId", "weight", "size", "color", "align", "vAlign", "lineHeight", "letterSpacing", "x", "y", "w", "h",
   "box", "boxColor", "boxOpacity", "boxRadius", "boxBorder", "boxBorderColor", "boxPad",
-  "outline", "outlineColor", "outlineWidth", "shadow", "shadowColor", "accentColor",
+  "outline", "outlineColor", "outlineWidth", "shadow", "shadowColor", "accentColor", "accentLines",
 ];
 export const POSITION_KEYS: (keyof BlockStyle)[] = ["x", "y", "w", "h"];
 
@@ -152,6 +152,7 @@ export const BASE_STYLE: BlockStyle = {
   shadow: false,
   shadowColor: "#000000",
   accentColor: "#ffe14d",
+  accentLines: [],
 };
 
 /** 표지 제목: 왼쪽 77px, 바닥 1200px, 84px, 검은 테두리 + 그림자 */
@@ -203,7 +204,7 @@ let seq = 0;
 export const blockId = () => `b${Date.now().toString(36)}${(seq++).toString(36)}`;
 
 export function newBlock(role: TextRole, text: string, style: Partial<BlockStyle> = {}): TextBlock {
-  return { ...defaultStyleFor(role), ...style, id: blockId(), role, original: "", text, accent: "" };
+  return { ...defaultStyleFor(role), ...style, id: blockId(), role, original: "", text };
 }
 
 /** 16진 색 + 0~100 진하기 → rgba() */

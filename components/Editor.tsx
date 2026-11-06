@@ -240,7 +240,7 @@ export default function Editor({ recipe, commerce, slides, captionBody, dmConten
     setSel(null);
   };
   const duplicateBlock = (i: number, b: TextBlock) => {
-    const c = { ...newBlock(b.role, b.text, styleOf(b)), accent: b.accent, y: Math.min(95, b.y + 4) };
+    const c = { ...newBlock(b.role, b.text, styleOf(b)), accentLines: b.accentLines, y: Math.min(95, b.y + 4) };
     setSlides((prev) => prev.map((s, j) => (j === i ? { ...s, blocks: [...s.blocks, c] } : s)));
     setSel({ slide: i, id: c.id });
   };
@@ -552,16 +552,6 @@ export default function Editor({ recipe, commerce, slides, captionBody, dmConten
             </h2>
             <button className="btn btn-secondary btn-sm" onClick={() => setSel(null)}>닫기 ✕</button>
           </div>
-          <div>
-            <label className="field-label" htmlFor="accent">강조할 낱말 (글 안에 있는 낱말만, 비우면 강조 없음)</label>
-            <input
-              id="accent"
-              type="text"
-              value={selected.accent}
-              onChange={(e) => updateBlock(sel.slide, selected.id, { accent: e.target.value })}
-              autoComplete="off"
-            />
-          </div>
           <div className="split">
             <div className="sticky">
               <SlidePreview
@@ -577,6 +567,7 @@ export default function Editor({ recipe, commerce, slides, captionBody, dmConten
           <StylePanel
             style={selected}
             sample={selected.text.split("\n")[0]}
+            lines={selected.text.split("\n").length}
             onChange={(patch) => updateBlock(sel.slide, selected.id, patch)}
           />
           <div className="stack sub">

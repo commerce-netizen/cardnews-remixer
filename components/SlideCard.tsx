@@ -54,10 +54,14 @@ function useFontsTick(): number {
 
 const JUSTIFY = { top: "flex-start", middle: "center", bottom: "flex-end" } as const;
 
-function withAccent(text: string, accent: string, color: string): ReactNode {
-  if (!accent || !text.includes(accent)) return text;
-  const parts = text.split(accent);
-  return parts.flatMap((p, i) => (i === 0 ? [p] : [<span key={i} style={{ color }}>{accent}</span>, p]));
+/** 강조: 고른 줄(줄바꿈 기준) 전체를 같은 색으로 */
+function withAccent(text: string, lines: number[] | undefined, color: string): ReactNode {
+  if (!color || !lines?.length) return text;
+  const on = new Set(lines);
+  return text.split("\n").flatMap((line, i) => {
+    const part = on.has(i + 1) ? <span key={i} style={{ color }}>{line}</span> : line;
+    return i === 0 ? [part] : ["\n", part];
+  });
 }
 
 /** 글 상자 하나. 글이 상자를 넘치면 글자 크기를 자동으로 줄인다 */
@@ -115,7 +119,7 @@ function Block({ b, height, text, tick }: { b: TextBlock; height: number; text: 
           textShadow: textShadow(b),
         }}
       >
-        {withAccent(text, b.accent, b.accentColor)}
+        {withAccent(text, b.accentLines, b.accentColor)}
       </p>
     </div>
   );

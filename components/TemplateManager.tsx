@@ -85,7 +85,6 @@ function sampleSlide(t: Template, side: Side): Slide {
     role: r,
     original: "",
     text: SAMPLE_TEXT[r],
-    accent: r === "title" ? "떡볶이" : r === "body" ? "쫄깃한" : "",
   }));
   return { image: null, original: "", ratio: 1.25, bg: "#3a3a3a", blocks };
 }
@@ -383,7 +382,7 @@ export default function TemplateManager({ onClose, onPick }: Props) {
                 </div>
                 {cur && (
                   <>
-                    <StylePanel style={cur} sample={cur.text.split("\n")[0]} onChange={(p) => patchSlot(cur.id, p)} />
+                    <StylePanel style={cur} sample={cur.text.split("\n")[0]} lines={cur.text.split("\n").length} onChange={(p) => patchSlot(cur.id, p)} />
                     {spec.styles?.[cur.id] && (
                       <button
                         className="btn btn-secondary"
@@ -609,7 +608,7 @@ export default function TemplateManager({ onClose, onPick }: Props) {
           <p className="muted small" style={{ margin: 0 }}>
             썸네일(1번 장)에는 <b>제목</b>, 2번 장부터는 <b>본문</b> 모양이 입혀져요. 글 상자를 직접 추가하면 다른 역할도 쓸 수 있어요.
           </p>
-          <StylePanel style={st} sample={SAMPLE_TEXT[role].split("\n")[0]} onChange={(p) => patch(role, p)} />
+          <StylePanel style={st} sample={SAMPLE_TEXT[role].split("\n")[0]} lines={SAMPLE_TEXT[role].split("\n").length} onChange={(p) => patch(role, p)} />
         </section>
         <section className="card stack">
           <h2 style={{ margin: 0 }}>워터마크 (모든 장 공통)</h2>
