@@ -10,6 +10,18 @@ export async function proxy(request: NextRequest) {
   const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
   if (!url || !anon) return NextResponse.next();
 
+  // 로그인하고 돌아올 때 Supabase가 허용 주소 목록에 없다며 첫 화면(?code=…)으로 보내는 경우가 있다 →
+  // 어느 화면으로 오든 code가 있으면 로그인 마무리(/auth/callback)로 넘긴다
+  const code = request.nextUrl.searchParams.get("code");
+  if (code && request.nextUrl.pathname !== "/auth/callback") {
+    const to = request.nextUrl.clone();
+    to.pathname = "/auth/callback";
+    to.search = "";
+    to.searchParams.set("code", code);
+    to.searchParams.set("next", request.nextUrl.pathname === "/" ? "/mypage" : request.nextUrl.pathname);
+    return NextResponse.redirect(to);
+  }
+
   let response = NextResponse.next({ request });
   const supabase = createServerClient(url, anon, {
     cookies: {
