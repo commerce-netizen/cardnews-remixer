@@ -980,3 +980,8 @@ input[type="range"] { width: 100%; height: 32px; accent-color: var(--primary); }
 .member-badge.s-admin { background: var(--primary-soft); color: var(--primary); }
 .member-badge.s-blocked { background: var(--danger-soft); color: var(--danger); }
 .member-badge.s-key { background: var(--bg-soft); color: var(--text); }
+.legal h2 { margin: 28px 0 8px; font-size: 1.1rem; }
+.legal p, .legal li { line-height: 1.75; }
+.legal ul { padding-left: 20px; margin: 0; }
+.legal-links { text-align: center; font-size: 0.82rem; color: var(--muted); margin-top: 18px; }
+.legal-links a { color: var(--muted); }

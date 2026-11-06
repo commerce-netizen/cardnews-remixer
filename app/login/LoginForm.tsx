@@ -124,6 +124,9 @@ export default function LoginForm() {
         </button>
       </div>
 
+      <p className="legal-links">
+        가입하면 <Link href="/terms">이용약관</Link>과 <Link href="/privacy">개인정보처리방침</Link>에 동의하는 것으로 봐요.
+      </p>
       <div style={{ textAlign: "center" }}>
         {mode === "login" ? (
           <button className="link-btn" onClick={() => { setMode("signup"); setError(null); setInfo(null); }}>처음이세요? 이메일로 회원가입</button>
