@@ -776,7 +776,8 @@ input[type="range"] { width: 100%; height: 32px; accent-color: var(--primary); }
 /* 붓: '돈' 왼쪽에서 글자를 쓰는 모양 */
 .brand-brush {
   width: 36px; height: 44px;
-  margin: 0 -5px -1px -8px;
+  margin: 0 -13px -1px -8px;
+  position: relative; z-index: 1;
   flex: none;
   filter: drop-shadow(0 1px 0 rgba(0, 0, 0, 0.12));
 }
@@ -797,5 +798,5 @@ input[type="range"] { width: 100%; height: 32px; accent-color: var(--primary); }
   .site-header-inner { padding: 8px 16px; }
   .brand { font-size: 28px; }
   .brand-sub { font-size: 14px; margin-left: 7px; padding-bottom: 2px; }
-  .brand-brush { width: 31px; height: 38px; margin: 0 -4px -1px -7px; }
+  .brand-brush { width: 31px; height: 38px; margin: 0 -11px -1px -7px; }
 }
