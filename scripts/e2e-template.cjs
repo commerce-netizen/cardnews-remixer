@@ -108,7 +108,7 @@ const BASE = `http://127.0.0.1:${PORT}`;
     await page.click("text=사진을 직접 올려서 만들기");
     await page.setInputFiles("input[type=file]", files);
     await page.waitForSelector(".thumb >> nth=1");
-    await page.click("button:has-text('카드뉴스 새로 만들기')");
+    await page.click("button:has-text('새로 만들기')");
     await page.waitForSelector("text=각색이 끝났어요", { timeout: 30_000 });
 
     assert.equal(await page.locator("#template").inputValue(), await templateIdOf(page, "내 테스트 디자인"));

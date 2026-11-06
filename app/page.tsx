@@ -72,8 +72,8 @@ export default function Home() {
     // 안내 문구에는 안에서 뭘 하는지(사진 몇 장을 만드는지 등) 드러내지 않는다
     setLoadingMsg(
       photos
-        ? "카드뉴스를 만들고 있어요…\n1~2분 정도 걸려요. 화면을 닫지 마세요."
-        : "카드뉴스 글을 쓰고 있어요…\n30초~1분 정도 걸려요. 화면을 닫지 마세요.",
+        ? "콘텐츠를 만들고 있어요…\n1~2분 정도 걸려요. 화면을 닫지 마세요."
+        : "글을 쓰고 있어요…\n30초~1분 정도 걸려요. 화면을 닫지 마세요.",
     );
 
     let done = 0;
@@ -192,7 +192,7 @@ export default function Home() {
 
   const startManual = () => {
     if (!uploads.length && !slideText.trim()) {
-      setError("사진을 올리거나, 카드뉴스 글을 붙여 넣어 주세요. (둘 중 하나는 꼭 필요해요)");
+      setError("사진을 올리거나, 글을 붙여 넣어 주세요. (둘 중 하나는 꼭 필요해요)");
       return;
     }
     run(
@@ -237,8 +237,8 @@ export default function Home() {
             <Link className="tab" href="/hot">인기 게시물</Link>
             <Link className="tab" href="/templates">디자인 템플릿</Link>
           </nav>
-          <h1>카드뉴스 각색기</h1>
-          <p className="lead">영상 없는 인스타그램 카드뉴스라면 무엇이든, 주소만 넣으면 새 사진·새 글로 다시 만들어 드려요.</p>
+          <h1>사진 콘텐츠 만들기</h1>
+          <p className="lead">영상 없는 인스타그램 사진 게시물이라면 무엇이든, 주소만 넣으면 새 사진·새 글로 다시 만들어 드려요.</p>
 
           {error && <div className="notice notice-error" role="alert">{error}</div>}
 
@@ -255,7 +255,7 @@ export default function Home() {
               autoComplete="off"
             />
             <button className="btn btn-primary btn-huge" onClick={() => startFromUrl()}>
-              카드뉴스 새로 만들기 ▶
+              새로 만들기 ▶
             </button>
             <p className="muted small" style={{ margin: 0 }}>
               주소 얻는 법: 인스타그램 게시물 오른쪽 위 ⋯ (또는 종이비행기) → <b>링크 복사</b>
@@ -273,13 +273,13 @@ export default function Home() {
       {step === "manual" && (
         <>
           <h1>직접 올려서 만들기</h1>
-          <p className="lead">카드뉴스 사진을 올리고, 글이 있으면 붙여 넣어 주세요. 사진 속 글씨는 AI가 읽어요.</p>
+          <p className="lead">사진을 올리고, 글이 있으면 붙여 넣어 주세요. 사진 속 글씨는 AI가 읽어요.</p>
 
           {info && <div className="notice notice-info" style={{ whiteSpace: "pre-line" }}>{info}</div>}
           {error && <div className="notice notice-error" role="alert">{error}</div>}
 
           <section className="card stack">
-            <h2 style={{ margin: 0 }}>① 카드뉴스 사진 (최대 10장)</h2>
+            <h2 style={{ margin: 0 }}>① 사진 (최대 10장)</h2>
             <label className="btn btn-primary btn-block">
               📷 사진 고르기
               <input type="file" accept="image/*" multiple hidden onChange={(e) => { addFiles(e.target.files); e.target.value = ""; }} />
@@ -301,7 +301,7 @@ export default function Home() {
           </section>
 
           <section className="card stack">
-            <h2 style={{ margin: 0 }}>② 카드뉴스 글 (선택)</h2>
+            <h2 style={{ margin: 0 }}>② 사진 속 글 (선택)</h2>
             <textarea
               rows={6}
               placeholder={"장마다 빈 줄로 나눠 붙여 넣어 주세요.\n\n예)\n여름 필수템 3가지\n\n첫 번째, 휴대용 선풍기"}
@@ -318,7 +318,7 @@ export default function Home() {
           </section>
 
           <button className="btn btn-primary btn-huge" onClick={startManual}>
-            카드뉴스 새로 만들기 ▶
+            새로 만들기 ▶
           </button>
           <div style={{ textAlign: "center", marginTop: 12 }}>
             <button className="link-btn" onClick={restart}>← 주소 넣는 화면으로</button>
