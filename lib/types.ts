@@ -15,6 +15,10 @@ export type Slide = {
   bg: string;
   /** 사진 위에 얹는 글 상자들 */
   blocks: TextBlock[];
+  /** 이 장 글자를 전부 이 글꼴로 (편집 화면의 '글꼴·글자 크기'에서 고름) */
+  fontOverride?: string;
+  /** 이 장 글자 크기 배율 (1 = 템플릿 그대로) */
+  sizeScale?: number;
   /** 템플릿 조합의 마지막 장 (AI가 쓰지 않는 고정 장 — 템플릿을 바꾸면 새로 붙는다) */
   fixedLast?: boolean;
   /** 양식 id (없으면 글 상자만 있는 기본 장) */

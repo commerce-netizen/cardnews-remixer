@@ -7,7 +7,7 @@ import FontPicker from "./FontPicker";
 import { ColorField, Range, Seg, TEXT_COLORS, Toggle } from "./controls";
 import { buildCaption } from "@/lib/caption";
 import { buildDm, type DmContent } from "@/lib/dm";
-import { loadFonts } from "@/lib/webfonts";
+import { loadFonts, snapWeight } from "@/lib/webfonts";
 import { ROLES, ROLE_LABEL, type BlockStyle, type TextBlock, type TextRole } from "@/lib/layout";
 import {
   BUILTIN_TEMPLATES,
@@ -356,6 +356,38 @@ export default function TemplateManager({ onClose, onPick }: Props) {
                   />
                 )}
                 <ColorField label="바탕색" value={spec.bg || ""} presets={BG_COLORS} onChange={(bg) => patchSpec({ bg })} />
+                <div>
+                  <span className="field-label">이 장 전체 글꼴</span>
+                  <FontPicker
+                    value={blocks.find((b) => b.role !== "handle")?.fontId ?? "Pretendard"}
+                    onChange={(fontId) => {
+                      const styles = { ...spec.styles };
+                      for (const b of blocks) styles[b.id] = { ...styles[b.id], fontId, weight: snapWeight(fontId, b.weight) };
+                      patchSpec({ styles });
+                    }}
+                    sample={blocks[0]?.text.split("\n")[0]}
+                  />
+                </div>
+                <div>
+                  <span className="field-label">이 장 전체 글자 크기</span>
+                  <div className="size-btns">
+                    {([["가−", 1 / 1.1], ["가+", 1.1]] as const).map(([label, f]) => (
+                      <button
+                        key={label}
+                        type="button"
+                        className="btn btn-secondary btn-sm"
+                        onClick={() => {
+                          const styles = { ...spec.styles };
+                          for (const b of blocks) styles[b.id] = { ...styles[b.id], size: Math.max(10, Math.round(b.size * f)) };
+                          patchSpec({ styles });
+                        }}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                  <p className="muted small" style={{ margin: "6px 0 0" }}>글 상자 하나만 바꾸려면 아래에서 고르거나 미리보기에서 누르세요.</p>
+                </div>
                 {step === "last" && def && (
                   <div className="stack">
                     <span className="field-label">마지막 장에 늘 들어갈 글 (AI가 바꾸지 않아요)</span>
