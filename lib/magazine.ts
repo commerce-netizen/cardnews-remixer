@@ -8,7 +8,7 @@
  *
  * 좌표는 1080×1350(4:5) 기준 px로 적고, 슬라이드 높이에 맞춰 세로만 늘이거나 줄인다.
  */
-import { BASE_STYLE, SLIDE_W, blockId, type BlockStyle, type TextBlock, type TextRole } from "./layout";
+import { BASE_STYLE, DEFAULT_BODY, DEFAULT_TITLE, SLIDE_W, blockId, styleOf, type BlockStyle, type TextBlock, type TextRole } from "./layout";
 
 export type LayoutKind = "cover" | "inner" | "last";
 export const KIND_LABEL: Record<LayoutKind, string> = { cover: "썸네일", inner: "내지", last: "마지막 장" };
@@ -27,6 +27,8 @@ export type Shape = Rect & {
   radius?: number;
   /** avatar 안 글자 */
   text?: string;
+  /** "shade" = 사진 아래쪽 어둡게 깔리는 그라데이션 (템플릿에서 켜고 끌 수 있다) */
+  tag?: "shade";
 };
 
 export type Fields = Record<string, string | string[]>;
@@ -72,7 +74,7 @@ const MUTED = "#6f6f6f";
 const PAPER = "#f7f6f2";
 const CHIP = { green: "#c9f0bf", pink: "#f9d1e1", blue: "#c9e7ff", yellow: "#ffef7a", orange: "#ffdcc0" };
 const FOLLOW_BLUE = "#0095f6";
-const SHADE_BOTTOM = "linear-gradient(180deg, rgba(0,0,0,0) 35%, rgba(0,0,0,0.55) 62%, rgba(0,0,0,0.9) 100%)";
+export const SHADE_BOTTOM = "linear-gradient(180deg, rgba(0,0,0,0) 35%, rgba(0,0,0,0.55) 62%, rgba(0,0,0,0.9) 100%)";
 const SHADE_TOP = "linear-gradient(0deg, rgba(0,0,0,0) 40%, rgba(0,0,0,0.6) 72%, rgba(0,0,0,0.88) 100%)";
 
 // ── 그리기 도구 ────────────────────────────────────────
@@ -197,6 +199,20 @@ const H1 = { weight: 800, lineHeight: 1.25, letterSpacing: -3 } as const;
 // ── 표지 ──────────────────────────────────────────────
 const COVERS: LayoutDef[] = [
   {
+    id: "cover-classic",
+    kind: "cover",
+    name: "기본 썸네일",
+    desc: "사진 위 왼쪽 아래 큰 제목, 검은 테두리 글씨",
+    photo: true,
+    fields: [{ key: "title", desc: "썸네일 제목. 정확히 3줄(\\n), 한 줄 6~14자", max: 40 }],
+    sample: { title: "이건\n썸네일입니다" },
+    build(f, ctx) {
+      const c = canvas(ctx);
+      c.text("title", "title", S(f.title), 77, 621, 927, 579, styleOf(DEFAULT_TITLE, false));
+      return done(c, "#1d1d1d", "light");
+    },
+  },
+  {
     id: "cover-photo-bottom",
     kind: "cover",
     name: "사진 + 하단 제목",
@@ -206,7 +222,7 @@ const COVERS: LayoutDef[] = [
     sample: { title: "이건\n썸네일\n입니다" },
     build(f, ctx) {
       const c = canvas(ctx);
-      c.box(0, 0, 1080, 1350, { fill: SHADE_BOTTOM });
+      c.box(0, 0, 1080, 1350, { fill: SHADE_BOTTOM, tag: "shade" });
       c.text("title", "title", S(f.title), 80, 780, 920, 440, { ...H1, size: 92, color: "#ffffff", vAlign: "bottom" });
       return done(c, "#1d1d1d", "light");
     },
@@ -244,7 +260,7 @@ const COVERS: LayoutDef[] = [
     sample: { title: "이건\n썸네일입니다" },
     build(f, ctx) {
       const c = canvas(ctx);
-      c.box(0, 0, 1080, 1350, { fill: SHADE_BOTTOM });
+      c.box(0, 0, 1080, 1350, { fill: SHADE_BOTTOM, tag: "shade" });
       c.text("title", "title", S(f.title), 80, 860, 920, 280, { ...H1, size: 94, color: "#ffffff", align: "center", vAlign: "bottom" });
       c.text(undefined, "handle", ctx.handle, 340, 1190, 400, 56, {
         weight: 700, size: 26, color: "#ffffff", align: "center", vAlign: "middle",
@@ -263,7 +279,7 @@ const COVERS: LayoutDef[] = [
     sample: { title: "이건\n썸네일입니다" },
     build(f, ctx) {
       const c = canvas(ctx);
-      c.box(0, 0, 1080, 820, { fill: "linear-gradient(180deg, rgba(0,0,0,0) 45%, #000 100%)" });
+      c.box(0, 0, 1080, 820, { fill: "linear-gradient(180deg, rgba(0,0,0,0) 45%, #000 100%)", tag: "shade" });
       c.text("title", "title", S(f.title), 80, 820, 920, 400, { ...H1, size: 112, color: "#ffffff", vAlign: "bottom", lineHeight: 1.18 });
       return done(c, "#000000", "light", c.rect(0, 0, 1080, 820));
     },
@@ -308,6 +324,20 @@ const COVERS: LayoutDef[] = [
 
 // ── 속지 ──────────────────────────────────────────────
 const INNERS: LayoutDef[] = [
+  {
+    id: "inner-textbox",
+    kind: "inner",
+    name: "기본 텍스트 박스",
+    desc: "사진 위 가운데 반투명 흰 박스 + 테두리 글씨",
+    photo: true,
+    fields: [{ key: "body", desc: "본문. 정확히 3줄(\\n), 한 줄 12~18자", max: 60 }],
+    sample: { body: "이건 내지입니다\n텍스트 박스 템플릿이에요" },
+    build(f, ctx) {
+      const c = canvas(ctx);
+      c.text("body", "body", S(f.body), 168, 953, 743, 258, styleOf(DEFAULT_BODY, false));
+      return done(c, "#1d1d1d", "light");
+    },
+  },
   {
     id: "info-table",
     kind: "inner",
@@ -745,7 +775,7 @@ const INNERS: LayoutDef[] = [
     sample: { name: "이건 장소 이름입니다", way: "이건 위치 한 줄입니다", intro: "이건 장소 소개 글입니다. 분위기나 추천할 점을 적어요." },
     build(f, ctx) {
       const c = canvas(ctx);
-      c.box(0, 0, 1080, 1350, { fill: "linear-gradient(180deg, rgba(0,0,0,0) 30%, rgba(0,0,0,0.7) 60%, rgba(0,0,0,0.92) 100%)" });
+      c.box(0, 0, 1080, 1350, { fill: "linear-gradient(180deg, rgba(0,0,0,0) 30%, rgba(0,0,0,0.7) 60%, rgba(0,0,0,0.92) 100%)", tag: "shade" });
       c.box(510, 860, 60, 3, { fill: "#ffffff" });
       c.text("name", "title", S(f.name), 80, 890, 920, 80, { weight: 800, size: 52, color: "#ffffff", align: "center", lineHeight: 1.2 });
       c.text("way", "subtitle", S(f.way), 80, 980, 920, 50, { size: 30, color: "rgba(255,255,255,0.85)", align: "center" });

@@ -5,7 +5,7 @@
  * 마지막 장은 AI가 쓰지 않고, 템플릿에 적어 둔 글(fields) 그대로 나온다.
  */
 import { slideHeight, type BlockStyle } from "./layout";
-import { DEFAULT_ACCENT, getLayout, type Fields, type LayoutKind } from "./magazine";
+import { DEFAULT_ACCENT, SHADE_BOTTOM, getLayout, type Fields, type LayoutKind } from "./magazine";
 import type { Slide } from "./types";
 
 export type PageSpec = {
@@ -17,6 +17,8 @@ export type PageSpec = {
   styles?: Record<string, Partial<BlockStyle>>;
   /** 마지막 장: 늘 이대로 나오는 글 (없으면 양식 보기글) */
   fields?: Fields;
+  /** 사진 아래쪽 그라데이션: true = 넣기, false = 빼기, 없으면 양식 기본 */
+  shade?: boolean;
 };
 
 export type Combo = {
@@ -29,8 +31,8 @@ export type Combo = {
 };
 
 export const DEFAULT_COMBO: Combo = {
-  cover: { layout: "cover-photo-bottom" },
-  inner: { layout: "photo-sub-body" },
+  cover: { layout: "cover-classic", shade: true },
+  inner: { layout: "inner-textbox" },
   last: { layout: "last-ask3" },
   accent: DEFAULT_ACCENT,
 };
@@ -77,6 +79,11 @@ export function applyPage(slide: Slide, spec: PageSpec, fields: Fields, look: Lo
     const o = b.slot ? spec.styles?.[b.slot] : undefined;
     return o ? { ...x, ...o } : x;
   });
+  // 아래쪽 그라데이션 켜기·끄기 (사진이 꽉 차는 양식에서만 의미 있음)
+  let shapes = built.shapes;
+  if (spec.shade === false) shapes = shapes.filter((x) => x.tag !== "shade");
+  else if (spec.shade === true && !shapes.some((x) => x.tag === "shade"))
+    shapes = [{ kind: "rect", x: 0, y: 0, w: 100, h: 100, fill: SHADE_BOTTOM, tag: "shade" }, ...shapes];
   return {
     ...slide,
     layout: spec.layout,
@@ -84,7 +91,7 @@ export function applyPage(slide: Slide, spec: PageSpec, fields: Fields, look: Lo
     bg: spec.bg || built.bg,
     ink,
     photo: built.photo,
-    shapes: built.shapes,
+    shapes,
     blocks,
   };
 }
