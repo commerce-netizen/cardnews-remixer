@@ -211,14 +211,63 @@ function loadAccounts() {
   return JSON.parse(fs.readFileSync(path.join(HERE, "accounts.json"), "utf8")).accounts;
 }
 
+/**
+ * GitHub 의 지금까지 모은 데이터를 받아 온다.
+ * 받기에 실패하면 **빈 데이터로 시작하지 않고 멈춘다** — 빈 데이터로 올리면 그동안 모은 게시물이 전부 지워진다.
+ * (hot-data 브랜치가 아예 없을 때만 빈 데이터로 시작)
+ */
 function pullData() {
-  fs.rmSync(OUT, { recursive: true, force: true });
+  let branchExists = true;
   try {
-    sh("git", ["clone", "-q", "--depth", "1", "--branch", "hot-data", `https://github.com/${REPO}.git`, OUT]);
-    fs.rmSync(path.join(OUT, ".git"), { recursive: true, force: true });
-  } catch {
-    fs.mkdirSync(OUT, { recursive: true });
+    branchExists = sh("git", ["ls-remote", "--heads", `https://github.com/${REPO}.git`, "hot-data"], { timeout: 60_000 }).trim() !== "";
+  } catch (e) {
+    throw new Error(`GitHub 에서 지금까지 모은 데이터를 확인하지 못했어요 (인터넷 연결 확인): ${String(e.message).slice(0, 150)}`);
   }
+  fs.rmSync(OUT, { recursive: true, force: true });
+  if (!branchExists) {
+    fs.mkdirSync(OUT, { recursive: true });
+    return;
+  }
+  let last;
+  for (let i = 0; i < 3; i++) {
+    try {
+      fs.rmSync(OUT, { recursive: true, force: true });
+      sh("git", ["clone", "-q", "--depth", "1", "--branch", "hot-data", `https://github.com/${REPO}.git`, OUT], { timeout: 180_000 });
+      fs.rmSync(path.join(OUT, ".git"), { recursive: true, force: true });
+      if (!fs.existsSync(path.join(OUT, "posts.json"))) throw new Error("posts.json 이 없어요");
+      return;
+    } catch (e) {
+      last = e;
+      execFileSync("sleep", ["10"]);
+    }
+  }
+  throw new Error(`지금까지 모은 데이터를 받지 못해 멈췄어요 (기존 데이터는 그대로 둠): ${String(last?.message).slice(0, 150)}`);
+}
+
+/** Aside 브라우저가 살아 있는지 (짧게 확인) */
+function asideAlive() {
+  try {
+    execFileSync(ASIDE, ["repl", "1"], { encoding: "utf8", timeout: 30_000, stdio: ["ignore", "pipe", "pipe"] });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** Aside 가 응답이 없으면 껐다 켠다. 끝내 안 되면 오류 */
+function ensureAside() {
+  if (asideAlive()) return;
+  for (let i = 1; i <= 3; i++) {
+    log(`  Aside 응답 없음 → 다시 켜는 중 (${i}/3)`);
+    try { execFileSync("osascript", ["-e", 'quit app "Aside"'], { timeout: 20_000 }); } catch {}
+    execFileSync("sleep", ["5"]);
+    try { execFileSync("pkill", ["-x", "Aside"]); } catch {}
+    execFileSync("sleep", ["3"]);
+    try { execFileSync("open", ["-ga", "Aside"]); } catch {}
+    execFileSync("sleep", ["40"]);
+    if (asideAlive()) return log("  Aside 다시 켜짐");
+  }
+  throw new Error("Aside 브라우저가 응답하지 않아요 (기존 데이터는 그대로 둠).");
 }
 
 function pushData() {
@@ -239,15 +288,23 @@ async function main() {
     : { accounts: {}, posts: [] };
   const known = new Map(db.posts.map((p) => [p.code, p]));
 
+  const prevCount = db.posts.length;
+  ensureAside();
+
   const fresh = [];
+  let okAccounts = 0;
   for (const account of accounts) {
     let r;
-    try {
-      r = scrapeProfile(account);
-    } catch (e) {
-      log(`⚠ @${account} 실패: ${e.message.slice(0, 200)}`);
-      continue;
+    for (let attempt = 1; attempt <= 2 && !r; attempt++) {
+      try {
+        r = scrapeProfile(account);
+      } catch (e) {
+        log(`⚠ @${account} 실패 (${attempt}/2): ${e.message.slice(0, 200)}`);
+        // 연결이 끊긴 거면 Aside 를 다시 켜고 한 번 더
+        if (attempt === 1) ensureAside();
+      }
     }
+    if (!r) continue;
     if (r.loginWall) throw new Error("Aside 브라우저에 인스타그램 로그인이 풀렸어요. Aside에서 instagram.com 에 다시 로그인해 주세요.");
     if (r.followers) db.accounts[account] = { ...db.accounts[account], followers: parseCount(r.followers.replace(/^팔로워/, "")) };
     // 격자 숫자는 [좋아요, 댓글] 순서. 하나만 보이면(좋아요 숨김 또는 댓글 끔) 옆 아이콘 모양으로 구분한다
@@ -263,9 +320,13 @@ async function main() {
       else [likes, comments] = [known.get(code)?.likes ?? 0, parseCount(v.stats[0][0])];
       fresh.push({ code, account, likes, comments, imageUrl: v.src || undefined });
     }
+    if (r.posts.length) okAccounts++;
     log(`  @${account}: 게시물 ${r.posts.length}개, ${r.followers || "팔로워 ?"}`);
   }
-  if (!fresh.length) throw new Error("게시물을 하나도 못 읽었어요.");
+  if (!fresh.length) throw new Error("게시물을 하나도 못 읽었어요 (기존 데이터는 그대로 둠).");
+  // 절반 넘는 계정이 실패하면 올리지 않는다 → 매일 실행 스크립트가 잠시 뒤 다시 시도
+  if (okAccounts < Math.ceil(accounts.length / 2))
+    throw new Error(`계정 ${accounts.length}개 중 ${okAccounts}개만 읽혀서 올리지 않았어요 (기존 데이터는 그대로 둠).`);
 
   // 종류를 아직 모르는 게시물만 확인 (처음 넣은 계정은 전부, 평소엔 새 게시물만)
   const unknown = fresh.filter((p) => !known.get(p.code)?.kind).map((p) => p.code);
@@ -314,6 +375,10 @@ async function main() {
 
   process.env.SHARP_PATH ||= path.join(BASE, "sharp/node_modules/sharp/lib/index.js");
   await saveHot({ out: OUT, accounts, db, fresh: finalFresh });
+  // 마지막 안전장치: 모은 게시물 수가 크게 줄었으면 올리지 않는다
+  const after = JSON.parse(fs.readFileSync(path.join(OUT, "posts.json"), "utf8")).posts.length;
+  if (PUSH && prevCount > 50 && after < prevCount * 0.7)
+    throw new Error(`모은 게시물이 ${prevCount}개 → ${after}개로 크게 줄어서 올리지 않았어요 (기존 데이터는 그대로 둠).`);
   if (PUSH) {
     pushData();
     log("✅ hot-data 브랜치에 올렸어요 (사이트에는 10분 안에 반영)");
