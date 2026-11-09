@@ -16,7 +16,7 @@ export const DEFAULT_PINNED_COMMENT = [
 
 /** 레시피가 아닌 게시물(제품 소개 등)의 고정 댓글 — 사용자가 준 레퍼런스 그대로 */
 export const PRODUCT_PINNED_COMMENT = [
-  "댓글에 '나도' 남겨주시면 DM으로 정보 드릴게요",
+  "💬 댓글에 '나도' 남겨주시면 DM으로 정보 드릴게요",
   "📢 프로필 링크 들어가서 < 0 or 제품명 > 검색해도 확인 가능해요!",
   "✅ DM 못 받으신 분들은 새 댓글 남겨주세요 🙏",
 ].join("\n");
