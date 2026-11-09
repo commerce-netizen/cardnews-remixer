@@ -6,8 +6,8 @@ import { Toggle } from "./controls";
 import { resizeImage } from "@/lib/client-images";
 import { IMAGE_GEN_ENABLED, makeAiPhoto } from "@/lib/slide-image";
 import { deviceKind, downloadZip, renderSlides, saveToGallery, triggerDownload } from "@/lib/export";
-import { DISCLOSURE, buildCaption } from "@/lib/caption";
-import { buildDm, type DmContent } from "@/lib/dm";
+import { DISCLOSURE, PRODUCT_PINNED_COMMENT, buildCaption } from "@/lib/caption";
+import { PRODUCT_DM, buildDm, type DmContent } from "@/lib/dm";
 import { loadFonts } from "@/lib/webfonts";
 import { ROLE_LABEL, SLIDE_W, newBlock, slideHeight, styleOf, type TextBlock } from "@/lib/layout";
 import {
@@ -26,7 +26,7 @@ import type { Slide } from "@/lib/types";
 import { comboSlides, dropLayout, slideText, syncField } from "@/lib/magazine-client";
 
 type Props = {
-  /** 음식·레시피 카드뉴스인지 (false = 정치·시사·패션 등 일반 → 캡션 CTA·고정 댓글·자동 DM 없음) */
+  /** 음식·레시피 카드뉴스인지 (false = 제품 소개·일반 → 캡션 CTA 없음, 고정 댓글·DM은 고정 문구) */
   recipe: boolean;
   /** 쿠팡 파트너스·광고 게시물인지 ([광고] 표시·고지 기본값) */
   commerce: boolean;
@@ -96,8 +96,9 @@ export default function Editor({ recipe, commerce, slides, captionBody, dmConten
   }, [captionBody, template, recipe, disclose]);
 
   useEffect(() => {
-    setDm(recipe ? buildDm(dmContent, template) : "");
-    setPinned(recipe ? template.pinnedComment : "");
+    // 레시피 = 템플릿 문구 + AI 레시피 / 그 외(제품 소개 등) = 고정 문구
+    setDm(recipe ? buildDm(dmContent, template) : PRODUCT_DM);
+    setPinned(recipe ? template.pinnedComment : PRODUCT_PINNED_COMMENT);
   }, [dmContent, template, recipe]);
 
   const setSlides = (fn: (prev: Slide[]) => Slide[]) => {
@@ -414,25 +415,30 @@ export default function Editor({ recipe, commerce, slides, captionBody, dmConten
           </button>
         </section>
 
-        {recipe && (
-          <section className="card">
-            <h2>고정 댓글</h2>
-            <p className="muted small" style={{ margin: "0 0 14px" }}>
-              게시물 올린 뒤 <b>맨 위에 고정</b>해 둘 댓글이에요. 문구는 <b>템플릿</b>에서 바꿀 수 있어요.
-            </p>
-            <textarea rows={5} value={pinned} onChange={(e) => { setPinned(e.target.value); setResults(null); }} aria-label="고정 댓글" />
-            <button className="btn btn-secondary btn-block" style={{ marginTop: 16 }} onClick={() => copyText(pinned, setPinnedCopied, "고정 댓글")}>
-              {pinnedCopied ? "✓ 복사됐어요" : "📋 고정 댓글 복사하기"}
-            </button>
-          </section>
-        )}
+        <section className="card">
+          <h2>고정 댓글</h2>
+          <p className="muted small" style={{ margin: "0 0 14px" }}>
+            게시물 올린 뒤 <b>맨 위에 고정</b>해 둘 댓글이에요.{" "}
+            {recipe ? <>문구는 <b>템플릿</b>에서 바꿀 수 있어요.</> : <><b>&lt; 0 or 제품명 &gt;</b> 부분을 바꿔서 쓰세요.</>}
+          </p>
+          <textarea rows={5} value={pinned} onChange={(e) => { setPinned(e.target.value); setResults(null); }} aria-label="고정 댓글" />
+          <button className="btn btn-secondary btn-block" style={{ marginTop: 16 }} onClick={() => copyText(pinned, setPinnedCopied, "고정 댓글")}>
+            {pinnedCopied ? "✓ 복사됐어요" : "📋 고정 댓글 복사하기"}
+          </button>
+        </section>
 
         {dm && (
           <section className="card">
             <h2>자동 DM</h2>
             <p className="muted small" style={{ margin: "0 0 14px" }}>
-              맨 윗줄·맨 아랫줄은 <b>템플릿</b>에서 바꿔요. <b>비밀재료가 뭔지는 일부러 안 적혀 있어요</b> —
-              그걸 알려면 링크를 눌러야 하니까요.
+              {recipe ? (
+                <>
+                  맨 윗줄·맨 아랫줄은 <b>템플릿</b>에서 바꿔요. <b>비밀재료가 뭔지는 일부러 안 적혀 있어요</b> —
+                  그걸 알려면 링크를 눌러야 하니까요.
+                </>
+              ) : (
+                <>댓글 단 사람에게 보낼 DM이에요. <b>&lt; 0 or 제품명 &gt;</b> 부분을 바꿔서 쓰세요.</>
+              )}
             </p>
             <textarea rows={18} value={dm} onChange={(e) => { setDm(e.target.value); setResults(null); }} aria-label="자동 DM" />
             <button className="btn btn-secondary btn-block" style={{ marginTop: 16 }} onClick={() => copyText(dm, setDmCopied, "DM")}>
@@ -447,7 +453,7 @@ export default function Editor({ recipe, commerce, slides, captionBody, dmConten
           <h2>완성! 🎉</h2>
           {device === "desktop" ? (
             <p>
-              <b>압축 파일(zip)</b>로 저장됐어요. 사진 {results.length}장과 함께 <b>캡션{recipe ? "·고정 댓글·자동 DM" : ""} 글</b>도 들어 있어요.
+              <b>압축 파일(zip)</b>로 저장됐어요. 사진 {results.length}장과 함께 <b>캡션·고정 댓글·자동 DM 글</b>도 들어 있어요.
             </p>
           ) : (
             <>
@@ -460,7 +466,7 @@ export default function Editor({ recipe, commerce, slides, captionBody, dmConten
                   : saved
                     ? <>갤러리 앱의 <b>&lsquo;Download&rsquo;(다운로드) 앨범</b>에 {results.length}장이 저장됐어요. 안 보이면 위 버튼을 다시 눌러 주세요.</>
                     : <>누르면 사진이 한 장씩 저장돼요. 갤러리 앱의 <b>&lsquo;Download&rsquo;</b> 앨범에서 보여요.</>}
-                {" "}캡션{recipe ? "·고정 댓글·DM" : ""}은 위 <b>복사하기</b> 버튼으로 옮기세요.
+                {" "}캡션·고정 댓글·DM은 위 <b>복사하기</b> 버튼으로 옮기세요.
               </p>
             </>
           )}

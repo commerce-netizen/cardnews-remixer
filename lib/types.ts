@@ -52,7 +52,7 @@ export type RemixRequest = {
 export type RemixResult = {
   slides: { original: string; title: string; body: string }[];
   caption: string;
-  /** 음식·레시피 카드뉴스인지 (false = 정치·시사·패션 등 일반 카드뉴스 → CTA·고정 댓글·DM 없음) */
+  /** 음식·레시피 카드뉴스인지 (false = 제품 소개·일반 카드뉴스 → 캡션 CTA 없음, 고정 댓글·DM은 고정 문구) */
   recipe: boolean;
   /** 쿠팡 파트너스·광고 게시물인지 ([광고] 표시·고지 기본값) */
   commerce: boolean;
