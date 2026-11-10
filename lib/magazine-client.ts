@@ -1,7 +1,7 @@
 /**
  * 화면 쪽 템플릿 조합 도우미 — 1번 장은 썸네일, 나머지는 내지(AI가 칸에 맞게 글을 나눔), 맨 끝에 마지막 장(고정 글).
  */
-import { getLayout, roughFields, setField } from "./magazine";
+import { getLayout, roughFields, setField, type Fields } from "./magazine";
 import { applyPage, lastSlide, type Combo, type PageSpec } from "./page-templates";
 import type { FillRequest, FillResult } from "./fill";
 import type { Slide } from "./types";
@@ -14,6 +14,12 @@ export function slideText(s: Slide): string {
     .map((b) => b.text.trim())
     .filter(Boolean)
     .join("\n");
+}
+
+/** 1번 장의 제목 글 (기본 장이면 제목 상자, 이미 양식이 입혀졌으면 title 칸) */
+function coverTitle(s: Slide): string | undefined {
+  const t = (typeof s.fields?.title === "string" ? s.fields.title : s.blocks.find((b) => b.role === "title")?.text)?.trim();
+  return t || undefined;
 }
 
 export async function requestFill(req: FillRequest): Promise<FillResult> {
@@ -34,17 +40,20 @@ export async function fillSlide(
   s: Slide,
   spec: PageSpec,
   look: Look,
-  extra: { context?: string; hasPhoto?: boolean; index?: number },
+  extra: { context?: string; hasPhoto?: boolean; index?: number; keepTitle?: string },
   strict = false,
 ): Promise<Slide> {
   const text = slideText(s);
+  const { keepTitle, ...req } = extra;
+  // 썸네일 제목은 각색 때 원본 줄 수에 맞춰 만든 글을 그대로 쓴다 (칸 채우기 AI가 줄이거나 고쳐 쓰지 않게)
+  const withTitle = (f: Fields) => (keepTitle && getLayout(spec.layout)?.fields.some((x) => x.key === "title") ? { ...f, title: keepTitle } : f);
   try {
-    const r = await requestFill({ layouts: [spec.layout], text, original: s.original, ...extra });
-    return applyPage(s, spec, r.fields, look);
+    const r = await requestFill({ layouts: [spec.layout], text, original: s.original, ...req });
+    return applyPage(s, spec, withTitle(r.fields), look);
   } catch (e) {
     if (strict) throw e;
     const def = getLayout(spec.layout);
-    return def ? applyPage(s, spec, roughFields(def, text || s.original), look) : s;
+    return def ? applyPage(s, spec, withTitle(roughFields(def, text || s.original)), look) : s;
   }
 }
 
@@ -54,7 +63,14 @@ export async function comboSlides(slides: Slide[], combo: Combo, handle: string,
   const context = content.map((s, i) => `[${i + 1}장] ${slideText(s)}`).join("\n");
   const look = { accent: combo.accent, handle };
   const built = await Promise.all(
-    content.map((s, i) => fillSlide(s, i === 0 ? combo.cover : combo.inner, look, { context, hasPhoto: hasPhoto(i), index: i + 1 })),
+    content.map((s, i) =>
+      fillSlide(s, i === 0 ? combo.cover : combo.inner, look, {
+        context,
+        hasPhoto: hasPhoto(i),
+        index: i + 1,
+        keepTitle: i === 0 ? coverTitle(s) : undefined,
+      }),
+    ),
   );
   return combo.last ? [...built, lastSlide(combo.last, look)] : built;
 }

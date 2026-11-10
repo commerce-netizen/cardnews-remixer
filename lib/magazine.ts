@@ -129,9 +129,18 @@ function canvas(ctx: LayoutCtx) {
     text(field: string | undefined, role: TextRole, t: string | [string, string, string], x: number, y: number, w: number, h: number, st: Partial<BlockStyle> = {}) {
       const [pre, val, post] = Array.isArray(t) ? t : ["", t, ""];
       const text = val ? `${pre}${val}${post}` : "";
+      // 제목이 양식보다 줄이 많으면(원본이 3줄인데 2줄 양식 등) 상자 높이에 맞게 글자를 줄인다
+      const fit: Partial<BlockStyle> = {};
+      if (role === "title" && text) {
+        const lines = text.split("\n").length;
+        const size = st.size ?? TEXT_BASE.size;
+        const lh = st.lineHeight ?? TEXT_BASE.lineHeight;
+        if (lines * size * lh > h) fit.size = Math.floor(h / (lines * lh));
+      }
       blocks.push({
         ...TEXT_BASE,
         ...st,
+        ...fit,
         ...pct(x, y, w, h),
         id: blockId(),
         role,

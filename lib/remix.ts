@@ -17,7 +17,7 @@ const ResultSchema = z.object({
   slides: z.array(
     z.object({
       original: z.string().describe("원본 슬라이드에서 읽은 글 그대로"),
-      title: z.string().describe("1번 장(표지)만, 줄마다 \\n. 2번 장부터는 빈 문자열"),
+      title: z.string().describe("1번 장(표지)만, 줄마다 \\n. 원본 표지와 같은 줄 수. 2번 장부터는 빈 문자열"),
       body: z.string().describe("2번 장부터, 줄마다 \\n. 1번 장은 빈 문자열"),
     }),
   ),
@@ -34,7 +34,7 @@ const ResultSchema = z.object({
 
 /*
  * 아래 규칙은 사용자가 준 레퍼런스 레시피 카드뉴스 5세트(20장) + 캡션을 분석해 뽑은 것이다.
- * 핵심: ①슬라이드는 표지·내지 모두 정확히 3줄 ②슬라이드엔 이모지가 하나도 없고 캡션에만 쓴다
+ * 핵심: ①표지는 원본 표지와 같은 줄 수(2줄이면 2줄, 3줄이면 3줄), 내지는 정확히 3줄 ②슬라이드엔 이모지가 하나도 없고 캡션에만 쓴다
  *      ③슬라이드는 반말 구어체, 캡션 본문은 존댓말 '~요'체 ④표지는 [권위]/[메뉴]/[공개 선언] 3단 구조
  */
 const SYSTEM = `당신은 인스타그램 카드뉴스 에디터입니다.
@@ -53,8 +53,10 @@ const SYSTEM = `당신은 인스타그램 카드뉴스 에디터입니다.
 - 캡션 본문 = 존댓말 '~요'체. 다정하게 알려주는 말투.
 - 광고 문구("최고의", "완벽한", "지금 바로")나 설명문투("~입니다", "~할 수 있습니다")는 쓰지 않습니다.
 
-■ 1번 장(표지) — title에만, **정확히 3줄**
-구조: ①권위(매출·지역·유명세) ②메뉴 이름 ③공개 선언
+■ 1번 장(표지) — title에만, **원본 표지와 같은 줄 수** (원본이 3줄이면 3줄, 2줄이면 2줄)
+구조(3줄일 때): ①권위(매출·지역·유명세·순위) ②메뉴 이름 ③공개 선언 / 2줄일 때: ①권위+메뉴 ②공개 선언
+- **원본 표지에 있는 정보(매출·지역·순위·메뉴 이름·공개 선언)는 하나도 빠뜨리지 않습니다.** 말만 바꾸고 줄 수와 정보는 그대로.
+  (나쁜 예: 원본 "매출 10억 청담 레스토랑 1위 / 오이사과 샐러드 / 황금 소스 비율 공개" → "줄 서는 청담 맛집" 한 줄 — 매출·순위·메뉴·공개가 다 빠짐)
 - 한 줄 6~14자. 이모지·물결표 금지. 물음표나 느낌표는 마지막 줄에 하나까지.
 - **세 줄에 같은 단어를 반복하지 마세요.** 메뉴 이름은 세 줄 중 한 줄에만 넣습니다.
   (나쁜 예: "줄 서는 신당 떡볶이 / 매콤한 즉석 떡볶이 / ..." — 떡볶이가 두 번)
@@ -65,7 +67,7 @@ const SYSTEM = `당신은 인스타그램 카드뉴스 에디터입니다.
   "월 1억 매출 한정식집\\n줄 서서 먹는 소고기 구이\\n비밀 레시피 공개"
   "연매출 10억 반찬가게\\n간장 진미채 맛의 비결\\n양념 비법 공개"
   "신당동 즉석 떡볶이\\n비밀 레시피 유출?\\n맛의 비결은 이거 하나!"
-- 원본에 매출·가게 정보가 없으면 지어내지 말고 "줄 서서 먹는", "유명한", "그 맛집" 같은 표현으로 3줄을 채웁니다.
+- 원본에 매출·가게 정보가 없을 때만 지어내지 말고 "줄 서서 먹는", "유명한", "그 맛집" 같은 표현으로 줄을 채웁니다.
 
 ■ 2번 장부터(내지) — body에만, **정확히 3줄**
 - 한 줄 12~18자. 3줄이 한 사람의 말처럼 쭉 이어지게 씁니다.
@@ -123,7 +125,7 @@ const SYSTEM = `당신은 인스타그램 카드뉴스 에디터입니다.
 
 =================== 일반 카드뉴스 (recipe=false) ===================
 ■ 슬라이드 글 (앱이 1번 장엔 title, 2번 장부터는 body 를 사진 위 글 상자 하나에 얹습니다)
-- 1번 장 title: 표지 제목. 2~3줄, 한 줄 6~16자. 짧고 강하게, 원본 표지의 핵심을 다른 말로.
+- 1번 장 title: 표지 제목. **원본 표지와 같은 줄 수**(2줄이면 2줄, 3줄이면 3줄), 한 줄 6~16자. 원본 표지의 정보는 빠짐없이, 말만 다르게.
 - 2번 장부터 body: 그 장의 핵심 내용을 2~4줄, 한 줄 10~20자. 원본 장의 정보를 빠짐없이 압축합니다.
 - 말투(반말·존댓말·뉴스체·매거진체)와 분위기는 원본과 같게 맞춥니다. 슬라이드 글에는 이모지를 쓰지 않습니다.
 - 이름·숫자·날짜·장소·인용문·사건 같은 **사실은 원본 그대로**. 원본에 없는 사실·수치·후기를 지어내지 않습니다.
@@ -211,6 +213,39 @@ function mockRemix(req: RemixRequest): RemixResult {
   };
 }
 
+/** 원본 표지 글의 줄 수 (2~3줄로 맞춤, 알 수 없으면 0) */
+export function coverLines(original: string): number {
+  const n = original.split("\n").map((l) => l.trim()).filter(Boolean).length;
+  return n >= 3 ? 3 : n === 2 ? 2 : 0;
+}
+
+/**
+ * AI가 표지 제목 줄 수를 원본과 다르게 냈을 때 줄 수를 맞춘다.
+ * 모자라면 띄어쓰기 기준으로 길이가 비슷하게 다시 나누고, 넘치면 뒤쪽 줄을 합친다.
+ */
+export function matchLines(title: string, n: number): string {
+  const lines = title.split("\n").map((l) => l.trim()).filter(Boolean);
+  if (!n || lines.length === n || !lines.length) return lines.join("\n");
+  const words = lines.join(" ").split(/\s+/).filter(Boolean);
+  if (words.length < n) return lines.join("\n");
+  const total = words.join(" ").length;
+  const out: string[] = [];
+  let cur: string[] = [];
+  for (let i = 0; i < words.length; i++) {
+    cur.push(words[i]);
+    const left = words.length - i - 1;
+    const need = n - out.length - 1;
+    const target = (total / n) * (out.length + 1);
+    const used = [...out, cur.join(" ")].join(" ").length;
+    if (need > 0 && (left === need || (used >= target && left >= need))) {
+      out.push(cur.join(" "));
+      cur = [];
+    }
+  }
+  if (cur.length) out.push(cur.join(" "));
+  return out.join("\n");
+}
+
 export async function remix(req: RemixRequest): Promise<RemixResult> {
   const slideText = req.slideText?.trim() ?? "";
   const caption = req.caption?.trim() ?? "";
@@ -268,7 +303,7 @@ export async function remix(req: RemixRequest): Promise<RemixResult> {
   }
   // CTA·고지·DM 인트로는 화면에서 템플릿 설정대로 붙인다 (lib/caption.ts, lib/dm.ts)
   return {
-    slides: out.slides,
+    slides: out.slides.map((sl, i) => (i === 0 ? { ...sl, title: matchLines(sl.title, coverLines(sl.original)) } : sl)),
     caption: out.caption.trim(),
     recipe: out.recipe,
     commerce: out.commerce || out.recipe,
