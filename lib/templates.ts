@@ -50,8 +50,8 @@ export type Template = {
   pinnedComment: string;
   dm: DmStyle;
   /**
-   * 템플릿 조합 — 썸네일 1 + 내지 1 + 마지막 장 1. 있으면 1번 장은 썸네일, 나머지는 내지로 그리고(AI가 칸에 맞게 글을 나눔)
-   * 맨 끝에 마지막 장(적어 둔 글 그대로)을 붙인다. 없으면 예전처럼 표지 제목 상자 + 내지 본문 상자.
+   * 템플릿 조합 — 썸네일 1 + 내지 1. 있으면 1번 장은 썸네일, 나머지는 내지로 그린다(AI가 칸에 맞게 글을 나눔).
+   * 없으면 예전처럼 표지 제목 상자 + 내지 본문 상자. (마지막 장은 없앰 — 예전에 저장된 last 값은 무시)
    */
   combo?: Combo;
 };
@@ -103,19 +103,19 @@ const builtinCombo = (id: string, name: string, combo: Combo): Template => ({
 export const BUILTIN_TEMPLATES: Template[] = [
   { id: "default", name: "기본 디자인", builtin: true, styles: { title: DEFAULT_TITLE, body: DEFAULT_BODY }, ...base },
   builtinCombo("set-classic", "기본 텍스트 박스", {
-    cover: { layout: "cover-classic", shade: true }, inner: { layout: "inner-textbox" }, last: { layout: "last-black-profile" }, accent: "#e5481c",
+    cover: { layout: "cover-classic", shade: true }, inner: { layout: "inner-textbox" }, accent: "#e5481c",
   }),
   builtinCombo("set-black", "블랙 무드", {
-    cover: { layout: "cover-photo-bottom" }, inner: { layout: "photo-sub-body" }, last: { layout: "last-black-profile" }, accent: "#e5481c",
+    cover: { layout: "cover-photo-bottom" }, inner: { layout: "photo-sub-body" }, accent: "#e5481c",
   }),
   builtinCombo("set-info", "정보 정리", {
-    cover: { layout: "cover-book" }, inner: { layout: "info-table" }, last: { layout: "last-ask3" }, accent: "#0b4a8f",
+    cover: { layout: "cover-book" }, inner: { layout: "info-table" }, accent: "#0b4a8f",
   }),
   builtinCombo("set-rank", "랭킹 리스트", {
-    cover: { layout: "cover-color-top" }, inner: { layout: "ranking" }, last: { layout: "last-ask3" }, accent: "#2fb79a",
+    cover: { layout: "cover-color-top" }, inner: { layout: "ranking" }, accent: "#2fb79a",
   }),
   builtinCombo("set-photo", "포토 스토리", {
-    cover: { layout: "cover-photo-center" }, inner: { layout: "dark-card" }, last: { layout: "last-black-text" }, accent: "#2b6fff",
+    cover: { layout: "cover-photo-center" }, inner: { layout: "dark-card" }, accent: "#2b6fff",
   }),
 ];
 
@@ -277,7 +277,7 @@ function migrate(raw: Template): Template {
     caption: { ...DEFAULT_CAPTION, ...t.caption },
     pinnedComment: t.pinnedComment ?? DEFAULT_PINNED_COMMENT,
     dm: { ...DEFAULT_DM, ...t.dm },
-    ...(t.combo?.cover && t.combo?.inner ? { combo: t.combo } : {}),
+    ...(t.combo?.cover && t.combo?.inner ? { combo: { cover: t.combo.cover, inner: t.combo.inner, accent: t.combo.accent } } : {}),
   };
 }
 

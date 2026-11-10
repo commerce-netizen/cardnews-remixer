@@ -33,8 +33,10 @@ import { DEFAULT_COMBO, favFirst, loadFavorites, samplePage, saveFavorites, type
 const ACCENTS = ["#e5481c", "#2b6fff", "#0b4a8f", "#2fb79a", "#f2b705", "#d6336c", "#141414"];
 /** 템플릿 미리보기에 쓰는 글꼴 */
 const MAG_FONTS = [500, 700, 800].map((w) => ({ id: "Pretendard", w })).concat([{ id: "NanumMyeongjo", w: 400 }]);
-const KINDS: LayoutKind[] = ["cover", "inner", "last"];
-const STEP_LABEL: Record<LayoutKind, string> = { cover: "① 썸네일", inner: "② 내지", last: "③ 마지막 장" };
+/** 템플릿 조합에서 고르는 장 (마지막 장은 없앰) */
+type Step = "cover" | "inner";
+const KINDS: Step[] = ["cover", "inner"];
+const STEP_LABEL: Record<Step, string> = { cover: "① 썸네일", inner: "② 내지" };
 const BG_COLORS = ["#ffffff", "#f7f6f2", "#efe9df", "#000000", "#1d1d1d", "#0b1f44"];
 
 const lookOf = (t: Template, accent?: string) => ({ accent: accent ?? t.combo?.accent ?? "#e5481c", handle: t.watermark.text || "@my_account" });
@@ -126,8 +128,8 @@ export default function TemplateManager({ onClose, onPick }: Props) {
   const [toast, setToast] = useState<string | null>(null);
   const [fav, setFav] = useState<Set<string>>(new Set());
   const [favOnly, setFavOnly] = useState(false);
-  // 조합 만들기: 지금 고르는 장(썸네일·내지·마지막 장)과 고르는 글 상자
-  const [step, setStep] = useState<LayoutKind>("cover");
+  // 조합 만들기: 지금 고르는 장(썸네일·내지)과 고르는 글 상자
+  const [step, setStep] = useState<Step>("cover");
   const [slot, setSlot] = useState<string | null>(null);
 
   useEffect(() => {
@@ -181,7 +183,7 @@ export default function TemplateManager({ onClose, onPick }: Props) {
     setStep("cover");
     setSlot(null);
   };
-  /** 내 템플릿 만들기 = 썸네일·내지·마지막 장 조합 */
+  /** 내 템플릿 만들기 = 썸네일·내지 조합 */
   const create = () => open({ ...duplicateTemplate(BUILTIN_TEMPLATES[1] ?? DEFAULT_TEMPLATE, uniqueName(templates, "내 템플릿")), combo: structuredClone(DEFAULT_COMBO) });
   const copy = (base: Template) => open(duplicateTemplate(base, uniqueName(templates, `내 ${base.name}`)));
   const edit = (t: Template) => open(structuredClone(t));
@@ -231,7 +233,7 @@ export default function TemplateManager({ onClose, onPick }: Props) {
   // ── 조합 고치기 도구 ──
   const patchCombo = (p: Partial<Combo>) =>
     setDraft((d) => (d?.combo ? { ...d, combo: { ...d.combo, ...p } } : d));
-  /** 지금 단계의 장을 고친다 (마지막 장 없음이면 아무것도 안 함) */
+  /** 지금 단계의 장을 고친다 */
   const patchSpec = (p: Partial<PageSpec>) =>
     setDraft((d) => {
       if (!d?.combo) return d;
@@ -248,7 +250,6 @@ export default function TemplateManager({ onClose, onPick }: Props) {
   const pickLayout = (layout: string | null) => {
     setSlot(null);
     if (!draft?.combo) return;
-    if (step === "last" && !layout) return patchCombo({ last: null });
     if (layout) patchCombo({ [step]: { layout } } as Partial<Combo>);
   };
 
@@ -261,31 +262,26 @@ export default function TemplateManager({ onClose, onPick }: Props) {
     const sample = spec ? specSample(spec, look) : null;
     const blocks = sample ? sample.blocks.filter((b) => b.text.trim()) : [];
     const cur = blocks.find((b) => b.id === slot) ?? null;
-    const lastFields: Fields = (combo.last && (combo.last.fields ?? getLayout(combo.last.layout)?.sample)) || {};
     return (
       <div>
         <h1>{templates.some((t) => t.id === draft.id) ? "내 템플릿 고치기" : "내 템플릿 만들기"}</h1>
-        <p className="lead">썸네일 · 내지 · 마지막 장을 하나씩 고르고 마음대로 고쳐서 나만의 조합을 만드세요.</p>
+        <p className="lead">썸네일 · 내지를 하나씩 고르고 마음대로 고쳐서 나만의 조합을 만드세요.</p>
 
-        {/* 세 장 한눈에 — 누르면 그 단계로 */}
+        {/* 두 장 한눈에 — 누르면 그 단계로 */}
         <div className="combo-strip">
           {KINDS.map((k) => {
             const sp = combo[k];
             return (
               <button key={k} className={`combo-step${step === k ? " on" : ""}`} onClick={() => { setStep(k); setSlot(null); }}>
                 <span className="combo-step-label">{STEP_LABEL[k]}</span>
-                {sp ? (
-                  <SlidePreview slide={samplePage(sp, look)} watermark={draft.watermark} adLabel={false} />
-                ) : (
-                  <div className="layout-auto">마지막 장<br />없음</div>
-                )}
-                <span className="combo-step-name">{sp ? getLayout(sp.layout)?.name : "붙이지 않음"}</span>
+                <SlidePreview slide={samplePage(sp, look)} watermark={draft.watermark} adLabel={false} />
+                <span className="combo-step-name">{getLayout(sp.layout)?.name}</span>
               </button>
             );
           })}
         </div>
         <p className="muted small" style={{ margin: "8px 0 24px" }}>
-          만들면 <b>1번 장은 썸네일</b>, <b>나머지 장은 모두 내지</b>로 나오고(AI가 칸에 맞게 글을 나눠요), 맨 끝에 <b>마지막 장</b>이 적어 둔 글 그대로 붙어요.
+          만들면 <b>1번 장은 썸네일</b>, <b>나머지 장은 모두 내지</b>로 나오고(AI가 칸에 맞게 글을 나눠요).
         </p>
 
         <div className="split">
@@ -300,9 +296,7 @@ export default function TemplateManager({ onClose, onPick }: Props) {
                   onSelect={(id) => setSlot(id)}
                   onMoveBlock={(id, p) => patchSlot(id, p)}
                 />
-              ) : (
-                <div className="layout-auto" style={{ aspectRatio: "4 / 5" }}>마지막 장을<br />붙이지 않아요</div>
-              )}
+              ) : null}
             </section>
           </div>
 
@@ -312,7 +306,7 @@ export default function TemplateManager({ onClose, onPick }: Props) {
                 <label className="field-label" htmlFor="tpl-name">템플릿 이름</label>
                 <input id="tpl-name" type="text" value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} autoComplete="off" />
               </div>
-              <ColorField label="포인트 색 (세 장 공통: 띠·번호·강조)" value={combo.accent} presets={ACCENTS} onChange={(accent) => patchCombo({ accent })} />
+              <ColorField label="포인트 색 (두 장 공통: 띠·번호·강조)" value={combo.accent} presets={ACCENTS} onChange={(accent) => patchCombo({ accent })} />
             </section>
 
             <section className="card stack">
@@ -325,13 +319,6 @@ export default function TemplateManager({ onClose, onPick }: Props) {
               </div>
               <h2 style={{ margin: 0 }}>{KIND_LABEL[step]} 고르기</h2>
               <div className="layout-grid">
-                {step === "last" && (
-                  <button className={`layout-pick${!combo.last ? " on" : ""}`} onClick={() => pickLayout(null)}>
-                    <div className="layout-auto">마지막 장<br />없음</div>
-                    <b>마지막 장 없음</b>
-                    <span>마지막 장을 붙이지 않아요</span>
-                  </button>
-                )}
                 {favFirst(layoutsOf(step), fav).map((l) => (
                   <div key={l.id} className={`layout-pick${spec?.layout === l.id ? " on" : ""}`} role="button" tabIndex={0}
                     onClick={() => pickLayout(l.id)} onKeyDown={(e) => e.key === "Enter" && pickLayout(l.id)}>
@@ -388,37 +375,6 @@ export default function TemplateManager({ onClose, onPick }: Props) {
                   </div>
                   <p className="muted small" style={{ margin: "6px 0 0" }}>글 상자 하나만 바꾸려면 아래에서 고르거나 미리보기에서 누르세요.</p>
                 </div>
-                {step === "last" && def && (
-                  <div className="stack">
-                    <span className="field-label">마지막 장에 늘 들어갈 글 (AI가 바꾸지 않아요)</span>
-                    {def.fields.map((f) =>
-                      f.count ? (
-                        Array.from({ length: f.count }, (_, i) => (
-                          <input
-                            key={`${f.key}.${i}`}
-                            type="text"
-                            value={((lastFields[f.key] as string[]) ?? [])[i] ?? ""}
-                            onChange={(e) => {
-                              const arr = [...(((lastFields[f.key] as string[]) ?? []))];
-                              arr[i] = e.target.value;
-                              patchSpec({ fields: { ...lastFields, [f.key]: arr } });
-                            }}
-                            aria-label={`${f.desc} ${i + 1}`}
-                          />
-                        ))
-                      ) : (
-                        <textarea
-                          key={f.key}
-                          rows={Math.max(2, String(lastFields[f.key] ?? "").split("\n").length)}
-                          value={String(lastFields[f.key] ?? "")}
-                          onChange={(e) => patchSpec({ fields: { ...lastFields, [f.key]: e.target.value } })}
-                          aria-label={f.desc}
-                        />
-                      ),
-                    )}
-                    <p className="muted small" style={{ margin: 0 }}>계정 이름 자리에는 워터마크 문구(내 채널 이름)가 들어가요.</p>
-                  </div>
-                )}
                 <span className="field-label">글 상자 모양 (미리보기에서 눌러도 돼요)</span>
                 <div className="slot-list">
                   {blocks.map((b) => (
@@ -797,12 +753,12 @@ export default function TemplateManager({ onClose, onPick }: Props) {
         {activeId === t.id && <span className="badge">지금 쓰는 중</span>}
       </div>
       {t.combo ? (
-        <div className="tpl-shots tpl-shots-3">
+        <div className="tpl-shots">
           {KINDS.map((k) => {
             const sp = t.combo![k];
             return (
               <figure key={k}>
-                {sp ? <SlidePreview slide={samplePage(sp, lookOf(t))} watermark={t.watermark} adLabel={false} /> : <div className="layout-auto">없음</div>}
+                <SlidePreview slide={samplePage(sp, lookOf(t))} watermark={t.watermark} adLabel={false} />
                 <figcaption>{KIND_LABEL[k]}</figcaption>
               </figure>
             );
@@ -847,7 +803,7 @@ export default function TemplateManager({ onClose, onPick }: Props) {
   return (
     <div>
       <h1>디자인 템플릿</h1>
-      <p className="lead">썸네일 · 내지 · 마지막 장을 골라 나만의 템플릿을 만들고, 클릭 한 번으로 전 장을 만들어 보세요.</p>
+      <p className="lead">썸네일 · 내지를 골라 나만의 템플릿을 만들고, 클릭 한 번으로 전 장을 만들어 보세요.</p>
 
       {toast && <div className="notice notice-info" role="status">{toast}</div>}
 
@@ -863,7 +819,7 @@ export default function TemplateManager({ onClose, onPick }: Props) {
         <div className="tpl-grid">{mine.map(card)}</div>
       ) : (
         <div className="card empty-mine">
-          {favOnly ? "즐겨찾기한 내 템플릿이 없어요." : "아직 내 템플릿이 없어요. '내 템플릿 만들기'를 눌러 썸네일 · 내지 · 마지막 장을 골라 보세요."}
+          {favOnly ? "즐겨찾기한 내 템플릿이 없어요." : "아직 내 템플릿이 없어요. '내 템플릿 만들기'를 눌러 썸네일 · 내지를 골라 보세요."}
         </div>
       )}
 
