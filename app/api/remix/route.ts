@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { friendlyError, withApiKey } from "@/lib/openai";
+import { errorStatus, friendlyError, withApiKey } from "@/lib/openai";
 import { remix } from "@/lib/remix";
 import { requestApiKey, statusOf } from "@/lib/user-key";
 import type { RemixRequest } from "@/lib/types";
@@ -22,6 +22,6 @@ export async function POST(req: Request) {
     return NextResponse.json(await withApiKey(key, () => remix(body)));
   } catch (e) {
     console.error("[remix]", e);
-    return NextResponse.json({ error: friendlyError(e) }, { status: 502 });
+    return NextResponse.json({ error: friendlyError(e) }, { status: errorStatus(e) });
   }
 }

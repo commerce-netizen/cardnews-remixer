@@ -1,4 +1,5 @@
 import { coverCrop, resizeImage } from "./client-images";
+import { postAi } from "./ai-fetch";
 
 /** 'AI 새 사진' 켜짐 여부 (빌드 시 값이 들어감). 기본 켜짐, "0"이면 끔 */
 export const IMAGE_GEN_ENABLED = process.env.NEXT_PUBLIC_ENABLE_IMAGE_GEN !== "0";
@@ -15,14 +16,8 @@ export async function makeAiPhoto(
   height: number,
 ): Promise<string> {
   const source = image ? await resizeImage(image, 1536, 0.85) : null;
-  const res = await fetch("/api/image-gen", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ image: source, title, body }),
-  });
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok || !data.image) {
-    throw new Error(data.error || "새 사진을 만들지 못했어요. 다시 한 번 눌러 주세요.");
-  }
+  const fail = "새 사진을 만들지 못했어요. 다시 한 번 눌러 주세요.";
+  const data = await postAi<{ image?: string }>("/api/image-gen", { image: source, title, body }, fail);
+  if (!data.image) throw new Error(fail);
   return coverCrop(data.image, width, height);
 }

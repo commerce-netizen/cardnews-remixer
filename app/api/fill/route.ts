@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { fillLayout, type FillRequest } from "@/lib/fill";
-import { friendlyError, withApiKey } from "@/lib/openai";
+import { errorStatus, friendlyError, withApiKey } from "@/lib/openai";
 import { requestApiKey, statusOf } from "@/lib/user-key";
 
 export const runtime = "nodejs";
@@ -19,6 +19,6 @@ export async function POST(req: Request) {
     return NextResponse.json(await withApiKey(key, () => fillLayout(body)));
   } catch (e) {
     console.error("[fill]", e);
-    return NextResponse.json({ error: friendlyError(e) }, { status: 502 });
+    return NextResponse.json({ error: friendlyError(e) }, { status: errorStatus(e) });
   }
 }

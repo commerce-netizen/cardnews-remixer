@@ -10,6 +10,7 @@ import type { DmContent } from "@/lib/dm";
 import { SLIDE_W, newBlock, styleOf } from "@/lib/layout";
 import { allTemplates, findTemplate, loadActiveId } from "@/lib/templates";
 import { comboSlides } from "@/lib/magazine-client";
+import { pool, postAi } from "@/lib/ai-fetch";
 import type { ExtractResult, RemixRequest, RemixResult, Slide } from "@/lib/types";
 
 
@@ -28,16 +29,7 @@ type Source = { request: RemixRequest; images: (string | null)[] };
 
 const proxied = (u: string) => `/api/image?url=${encodeURIComponent(u)}`;
 
-async function postJson<T>(url: string, body: unknown): Promise<T> {
-  const res = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data.error || "문제가 생겼어요. 잠시 뒤 다시 시도해 주세요.");
-  return data as T;
-}
+const postJson = <T,>(url: string, body: unknown) => postAi<T>(url, body, "문제가 생겼어요. 잠시 뒤 다시 시도해 주세요.");
 
 export default function Home() {
   const [step, setStep] = useState<Step>("home");
@@ -80,10 +72,12 @@ export default function Home() {
 
     let done = 0;
     const failed: number[] = [];
+    let photoError = "";
     const makePhoto = (img: string | null, i: number) =>
       makeAiPhoto(img, "", "", SLIDE_W, 1350)
-        .catch(() => {
+        .catch((e) => {
           failed.push(i + 1);
+          photoError ||= (e as Error).message;
           return null; // 실패한 장은 빈 바탕 (원본엔 글씨가 박혀 있어 새 글과 겹치고, 저작권 문제도 있음)
         })
         .then((v) => {
@@ -118,7 +112,8 @@ export default function Home() {
       const [{ r, built }, aiImages] = await Promise.all([
         textP,
         photos
-          ? Promise.all(src.images.map((img, i) => (img ? makePhoto(img, i) : Promise.resolve(null))))
+          ? // 사진은 한 번에 3장씩 — 10장을 한꺼번에 보내면 OpenAI 1분당 사진 한도에 걸린다
+            pool(src.images, 3, (img, i) => (img ? makePhoto(img, i) : Promise.resolve(null)))
           : Promise.resolve([] as (string | null)[]),
       ]);
 
@@ -136,7 +131,7 @@ export default function Home() {
       setSource(src);
       setInfo(
         failed.length
-          ? `${failed.join("·")}번 장은 AI 사진을 못 만들어서 비워 뒀어요. 그 장의 ✨ AI 새 사진 만들기를 다시 눌러 주세요.`
+          ? `${failed.sort((a, b) => a - b).join("·")}번 장은 AI 사진을 못 만들어서 비워 뒀어요. 그 장의 ✨ AI 새 사진 만들기를 다시 눌러 주세요.${photoError ? `\n(이유: ${photoError})` : ""}`
           : null,
       );
       setStep("edit");
@@ -399,7 +394,7 @@ export default function Home() {
       )}
 
       {step === "edit" && error && <div className="notice notice-error" role="alert">{error}</div>}
-      {step === "edit" && info && <div className="notice notice-info">{info}</div>}
+      {step === "edit" && info && <div className="notice notice-info" style={{ whiteSpace: "pre-line" }}>{info}</div>}
       {step === "edit" && source && (
         <Editor
           key={`${recipe}-${commerce}`}

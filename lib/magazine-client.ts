@@ -2,6 +2,7 @@
  * 화면 쪽 템플릿 조합 도우미 — 1번 장은 썸네일, 나머지는 내지(AI가 칸에 맞게 글을 나눔).
  */
 import { getLayout, roughFields, setField, type Fields } from "./magazine";
+import { pool, postAi } from "./ai-fetch";
 import { applyPage, type Combo, type PageSpec } from "./page-templates";
 import type { FillRequest, FillResult } from "./fill";
 import type { Slide } from "./types";
@@ -23,14 +24,7 @@ function coverTitle(s: Slide): string | undefined {
 }
 
 export async function requestFill(req: FillRequest): Promise<FillResult> {
-  const res = await fetch("/api/fill", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(req),
-  });
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data.error || "템플릿에 글을 넣지 못했어요. 다시 눌러 주세요.");
-  return data as FillResult;
+  return postAi<FillResult>("/api/fill", req, "템플릿에 글을 넣지 못했어요. 다시 눌러 주세요.");
 }
 
 type Look = { accent: string; handle: string };
@@ -57,20 +51,18 @@ export async function fillSlide(
   }
 }
 
-/** 기본 장들을 조합대로 (장끼리는 동시에). 예전에 붙던 마지막 장은 빼고 만든다 */
+/** 기본 장들을 조합대로 (한 번에 4장씩 — 한꺼번에 보내면 1분당 한도에 걸림). 예전에 붙던 마지막 장은 빼고 만든다 */
 export async function comboSlides(slides: Slide[], combo: Combo, handle: string, hasPhoto: (i: number) => boolean): Promise<Slide[]> {
   const content = slides.filter((s) => !s.fixedLast);
   const context = content.map((s, i) => `[${i + 1}장] ${slideText(s)}`).join("\n");
   const look = { accent: combo.accent, handle };
-  const built = await Promise.all(
-    content.map((s, i) =>
+  const built = await pool(content, 4, (s, i) =>
       fillSlide(s, i === 0 ? combo.cover : combo.inner, look, {
         context,
         hasPhoto: hasPhoto(i),
         index: i + 1,
         keepTitle: i === 0 ? coverTitle(s) : undefined,
       }),
-    ),
   );
   return built;
 }
