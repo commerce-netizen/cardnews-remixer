@@ -1,8 +1,8 @@
 /**
- * 화면 쪽 템플릿 조합 도우미 — 1번 장은 썸네일, 나머지는 내지(AI가 칸에 맞게 글을 나눔), 맨 끝에 마지막 장(고정 글).
+ * 화면 쪽 템플릿 조합 도우미 — 1번 장은 썸네일, 나머지는 내지(AI가 칸에 맞게 글을 나눔).
  */
 import { getLayout, roughFields, setField, type Fields } from "./magazine";
-import { applyPage, lastSlide, type Combo, type PageSpec } from "./page-templates";
+import { applyPage, type Combo, type PageSpec } from "./page-templates";
 import type { FillRequest, FillResult } from "./fill";
 import type { Slide } from "./types";
 import { snapWeight } from "./webfonts";
@@ -57,7 +57,7 @@ export async function fillSlide(
   }
 }
 
-/** 기본 장들을 조합대로 (장끼리는 동시에) + 맨 끝에 마지막 장 */
+/** 기본 장들을 조합대로 (장끼리는 동시에). 예전에 붙던 마지막 장은 빼고 만든다 */
 export async function comboSlides(slides: Slide[], combo: Combo, handle: string, hasPhoto: (i: number) => boolean): Promise<Slide[]> {
   const content = slides.filter((s) => !s.fixedLast);
   const context = content.map((s, i) => `[${i + 1}장] ${slideText(s)}`).join("\n");
@@ -72,7 +72,7 @@ export async function comboSlides(slides: Slide[], combo: Combo, handle: string,
       }),
     ),
   );
-  return combo.last ? [...built, lastSlide(combo.last, look)] : built;
+  return built;
 }
 
 /** 색·계정 이름만 바뀌었을 때 — AI 없이 저장된 칸 값으로 다시 그린다 */

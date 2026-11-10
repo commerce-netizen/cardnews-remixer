@@ -1,8 +1,7 @@
 /**
- * 템플릿 조합 = 썸네일 1 + 내지 1 + 마지막 장 1.
+ * 템플릿 조합 = 썸네일 1 + 내지 1. (마지막 장은 없앰)
  *
  * 장 하나(PageSpec) = 바탕이 되는 양식(lib/magazine.ts) + 내가 고친 것(바탕색·글 상자별 글꼴/크기/색/위치).
- * 마지막 장은 AI가 쓰지 않고, 템플릿에 적어 둔 글(fields) 그대로 나온다.
  */
 import { slideHeight, type BlockStyle } from "./layout";
 import { DEFAULT_ACCENT, SHADE_BOTTOM, getLayout, type Fields, type LayoutKind } from "./magazine";
@@ -25,16 +24,13 @@ export type PageSpec = {
 export type Combo = {
   cover: PageSpec;
   inner: PageSpec;
-  /** 없으면 마지막 장을 붙이지 않는다 */
-  last: PageSpec | null;
-  /** 포인트 색 (띠·번호·강조) — 세 장 공통 */
+  /** 포인트 색 (띠·번호·강조) — 썸네일·내지 공통 */
   accent: string;
 };
 
 export const DEFAULT_COMBO: Combo = {
   cover: { layout: "cover-classic", shade: true },
   inner: { layout: "inner-textbox" },
-  last: { layout: "last-ask3" },
   accent: DEFAULT_ACCENT,
 };
 
@@ -95,14 +91,6 @@ export function applyPage(slide: Slide, spec: PageSpec, fields: Fields, look: Lo
     shapes,
     blocks,
   };
-}
-
-/** 마지막 장 — AI 없이 템플릿에 적어 둔 글 그대로. 사진 칸 없이 바탕색만 */
-export function lastSlide(spec: PageSpec, look: Look): Slide {
-  const def = getLayout(spec.layout);
-  const base: Slide = { image: null, original: "", ratio: 1.25, bg: "", blocks: [], fixedLast: true };
-  if (!def) return base;
-  return { ...applyPage(base, spec, spec.fields ?? def.sample, look), photo: null };
 }
 
 /** 미리보기용 보기 슬라이드 (마지막 장은 적어 둔 글로) */

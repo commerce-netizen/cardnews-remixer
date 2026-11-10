@@ -113,7 +113,7 @@ export default function Editor({ recipe, commerce, slides, captionBody, dmConten
   /**
    * 템플릿 고르기.
    * 글 상자형 = 모든 장의 글 상자에 역할별 모양(글꼴·크기·색·위치)을 입힌다.
-   * 조합 = 1번 장 썸네일, 나머지 내지(AI가 칸에 맞게 글을 다시 나눔), 맨 끝 마지막 장(적어 둔 글 그대로).
+   * 조합 = 1번 장 썸네일, 나머지 내지(AI가 칸에 맞게 글을 다시 나눔). 예전 마지막 장은 빼고 만든다.
    */
   async function applyTemplate(id: string, list: Template[] = templates) {
     const t = findTemplate(list, id);
