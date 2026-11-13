@@ -238,7 +238,7 @@ function frameInner(id: string, name: string, desc: string, y: number): LayoutDe
     build(f, ctx) {
       const c = canvas(ctx);
       c.text("body", "body", S(f.body), 170, y, 740, 190, {
-        weight: 500, size: 40, color: "#ffffff", align: "center", vAlign: "middle", lineHeight: 1.4, shadow: true,
+        weight: 400, size: 40, color: "#ffffff", align: "center", vAlign: "middle", lineHeight: 1.4, shadow: true,
         box: true, boxColor: "#000000", boxOpacity: 18, boxRadius: 0, boxPad: 24, boxBorder: true, boxBorderColor: "#ffffff",
       });
       c.text("cta", "other", S(f.cta), ...CTA_AT, CTA_BUBBLE);
@@ -387,7 +387,7 @@ const COVERS: LayoutDef[] = [
       const c = canvas(ctx);
       c.box(0, 0, 1080, 1350, { fill: SHADE_BOTTOM, tag: "shade" });
       c.text("kicker", "label", S(f.kicker), 270, 930, 540, 64, CHIP_PILL);
-      c.text("title", "title", S(f.title), 50, 1015, 980, 250, { ...HOT_TITLE, align: "center", accentColor: ctx.accent, accentLines: [2] });
+      c.text("title", "title", S(f.title), 50, 1015, 980, 250, { ...HOT_TITLE, fontId: "jua", weight: 400, size: 88, letterSpacing: -2, align: "center", accentColor: ctx.accent, accentLines: [2] });
       return done(c, "#1d1d1d", "light");
     },
   },
@@ -406,7 +406,7 @@ const COVERS: LayoutDef[] = [
       const c = canvas(ctx);
       c.box(0, 0, 1080, 1350, { fill: SHADE_TOP });
       c.text("kicker", "label", S(f.kicker), 270, 130, 540, 64, CHIP_PILL);
-      c.text("title", "title", S(f.title), 50, 215, 980, 250, { ...HOT_TITLE, align: "center", accentColor: ctx.accent, accentLines: [2] });
+      c.text("title", "title", S(f.title), 50, 215, 980, 250, { ...HOT_TITLE, fontId: "BMDOHYEON", weight: 400, size: 86, letterSpacing: -2, outline: true, outlineWidth: 3, align: "center", accentColor: ctx.accent, accentLines: [2] });
       return done(c, "#1d1d1d", "light");
     },
   },
@@ -421,7 +421,7 @@ const COVERS: LayoutDef[] = [
     build(f, ctx) {
       const c = canvas(ctx);
       c.box(0, 0, 1080, 1350, { fill: "rgba(0,0,0,0.28)" });
-      c.text("title", "title", S(f.title), 50, 440, 980, 470, { ...HOT_TITLE, size: 78, align: "center", vAlign: "middle" });
+      c.text("title", "title", S(f.title), 50, 440, 980, 470, { ...HOT_TITLE, fontId: "Jalnan", weight: 400, size: 76, letterSpacing: -2, lineHeight: 1.3, align: "center", vAlign: "middle" });
       return done(c, "#1d1d1d", "light");
     },
   },
@@ -439,8 +439,8 @@ const COVERS: LayoutDef[] = [
     build(f, ctx) {
       const c = canvas(ctx);
       c.box(0, 0, 1080, 1350, { fill: SHADE_BOTTOM, tag: "shade" });
-      c.text("kicker", "label", S(f.kicker), 60, 1000, 960, 60, { weight: 500, size: 40, color: "#ffffff", lineHeight: 1.2, shadow: true });
-      c.text("title", "title", S(f.title), 60, 1070, 960, 220, { weight: 600, size: 76, color: "#ffffff", lineHeight: 1.3, letterSpacing: -2, shadow: true });
+      c.text("kicker", "label", S(f.kicker), 60, 1000, 960, 60, { weight: 400, size: 40, color: "#ffffff", lineHeight: 1.2, letterSpacing: 2, shadow: true });
+      c.text("title", "title", S(f.title), 60, 1070, 960, 220, { weight: 500, size: 76, color: "#ffffff", lineHeight: 1.3, letterSpacing: 3, shadow: true });
       return done(c, "#1d1d1d", "light");
     },
   },
@@ -459,7 +459,7 @@ const COVERS: LayoutDef[] = [
       const c = canvas(ctx);
       c.box(0, 0, 1080, 1350, { fill: SHADE_BOTTOM, tag: "shade" });
       c.text("kicker", "label", S(f.kicker), 60, 880, 960, 52, { weight: 600, size: 32, color: "#ffffff", align: "center", lineHeight: 1.2, shadow: true });
-      c.text("title", "title", S(f.title), 50, 945, 980, 330, { ...HOT_TITLE, size: 76, align: "center", accentColor: ctx.accent, accentLines: [3] });
+      c.text("title", "title", S(f.title), 50, 945, 980, 330, { ...HOT_TITLE, fontId: "Aggro", weight: 700, size: 74, letterSpacing: -3, align: "center", accentColor: ctx.accent, accentLines: [3] });
       return done(c, "#1d1d1d", "light");
     },
   },
@@ -482,7 +482,7 @@ const COVERS: LayoutDef[] = [
       const c = canvas(ctx);
       c.box(0, 0, 1080, 1350, { fill: SHADE_TOP });
       c.text("kicker", "label", S(f.kicker), 270, 130, 540, 64, CHIP_PILL);
-      c.text("title", "title", S(f.title), 50, 215, 980, 250, { ...HOT_TITLE, align: "center", accentColor: ctx.accent, accentLines: [2] });
+      c.text("title", "title", S(f.title), 50, 215, 980, 250, { ...HOT_TITLE, fontId: "GmarketSans", weight: 700, size: 82, letterSpacing: -4, outline: true, outlineWidth: 3, align: "center", accentColor: ctx.accent, accentLines: [2] });
       if (S(f.price)) {
         c.box(690, 860, 330, 380, { fill: "#ffffff", radius: 18 });
         c.text("tag", "label", S(f.tag), 710, 885, 290, 60, { weight: 800, size: 36, align: "center", vAlign: "middle", lineHeight: 1.1 });
@@ -491,7 +491,7 @@ const COVERS: LayoutDef[] = [
           weight: 800, size: 34, color: "#ffffff", align: "center", vAlign: "middle", lineHeight: 1,
           box: true, boxColor: ctx.accent, boxOpacity: 100, boxRadius: 10, boxPad: 0,
         });
-        c.text("price", "number", S(f.price), 710, 1110, 290, 90, { weight: 800, size: 52, color: ctx.accent, align: "center", vAlign: "middle", lineHeight: 1, letterSpacing: -3 });
+        c.text("price", "number", S(f.price), 710, 1110, 290, 90, { fontId: "GmarketSans", weight: 700, size: 52, color: ctx.accent, align: "center", vAlign: "middle", lineHeight: 1, letterSpacing: -3 });
       }
       return done(c, "#1d1d1d", "light");
     },
@@ -997,7 +997,7 @@ const INNERS: LayoutDef[] = [
     build(f, ctx) {
       const c = canvas(ctx);
       c.box(0, 0, 1080, 1350, { fill: SHADE_BOTTOM, tag: "shade" });
-      c.text("body", "body", S(f.body), 70, 860, 940, 240, { weight: 600, size: 46, color: "#ffffff", align: "center", vAlign: "middle", lineHeight: 1.45, shadow: true });
+      c.text("body", "body", S(f.body), 70, 860, 940, 240, { fontId: "GmarketSans", weight: 500, size: 44, color: "#ffffff", align: "center", vAlign: "middle", lineHeight: 1.5, letterSpacing: -3, shadow: true });
       c.text("cta", "other", S(f.cta), ...CTA_AT, CTA_BUBBLE);
       return done(c, "#1d1d1d", "light");
     },
@@ -1164,6 +1164,17 @@ export const LAYOUTS: LayoutDef[] = [...COVERS, ...INNERS, ...LASTS]
 const BY_ID = new Map(LAYOUTS.map((l) => [l.id, l]));
 export const getLayout = (id?: string | null) => (id ? BY_ID.get(id) : undefined);
 export const layoutsOf = (kind: LayoutKind) => LAYOUTS.filter((l) => l.kind === kind);
+
+/** 양식들이 기본으로 쓰는 글꼴 (미리보기 전에 내려받아 두기) */
+export function layoutFonts(): { id: string; w: number }[] {
+  const seen = new Map<string, { id: string; w: number }>();
+  for (const l of LAYOUTS) {
+    for (const b of l.build(l.sample, { H: 1350, accent: DEFAULT_ACCENT, handle: "@a" }).blocks) {
+      seen.set(`${b.fontId}:${b.weight}`, { id: b.fontId, w: b.weight });
+    }
+  }
+  return [...seen.values()];
+}
 
 /** 칸 값 정리: 목록은 정해진 개수로, 글은 문자열로 */
 export function normalizeFields(def: LayoutDef, raw: Fields): Fields {

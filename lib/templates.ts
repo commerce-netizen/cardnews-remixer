@@ -113,10 +113,11 @@ export const BUILTIN_TEMPLATES: Template[] = [
     cover: { layout: "cover-chip-top" }, inner: { layout: "inner-frame-top" }, accent: "#ffe14d",
   }),
   builtinCombo("hot-left-recipe", "인기 · 왼쪽 아래 레시피", {
-    cover: { layout: "cover-kicker-left" }, inner: { layout: "inner-frame-bottom" }, accent: "#ffe14d",
+    cover: { layout: "cover-kicker-left" }, inner: { layout: "inner-memo-top" }, accent: "#ffe14d",
   }),
   builtinCombo("hot-left-bold", "인기 · 왼쪽 아래 굵은 세 줄", {
-    cover: { layout: "cover-classic", shade: true }, inner: { layout: "inner-memo-top" }, accent: "#ffe14d",
+    cover: { layout: "cover-classic", shade: true, styles: { title: { fontId: "Pretendard", weight: 700, size: 78, outline: false, shadow: true } } },
+    inner: { layout: "inner-frame-bottom" }, accent: "#ffe14d",
   }),
   builtinCombo("hot-three-accent", "인기 · 세 줄 끝줄 강조", {
     cover: { layout: "cover-three-accent" }, inner: { layout: "inner-plain-center" }, accent: "#a8f25c",
@@ -128,7 +129,8 @@ export const BUILTIN_TEMPLATES: Template[] = [
     cover: { layout: "cover-price" }, inner: { layout: "inner-frame-bottom" }, accent: "#e5302a",
   }),
   builtinCombo("hot-handwrite", "인기 · 손글씨 후기", {
-    cover: { layout: "cover-chip-top" }, inner: { layout: "inner-hand-top" }, accent: "#ffe14d",
+    cover: { layout: "cover-chip-top", styles: { title: { fontId: "Cafe24Ssurround", weight: 400, outline: false, letterSpacing: -3 } } },
+    inner: { layout: "inner-hand-top" }, accent: "#ffe14d",
   }),
   // ── 예전 기본 제공 템플릿 ──
   builtinCombo("set-black", "블랙 무드", {
@@ -227,6 +229,9 @@ export function uniqueName(list: Template[], base: string): string {
 export function templateFontIds(t: Template): FontNeed[] {
   return [
     ...Object.values(t.styles).filter(Boolean).map((st) => ({ id: st!.fontId, w: st!.weight })),
+    ...[t.combo?.cover, t.combo?.inner].flatMap((p) => Object.values(p?.styles ?? {}))
+      .filter((st) => st?.fontId)
+      .map((st) => ({ id: st!.fontId!, w: st!.weight ?? 400 })),
     t.watermark.fontId,
   ];
 }
