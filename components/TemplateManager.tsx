@@ -26,13 +26,13 @@ import {
   type WatermarkStyle,
 } from "@/lib/templates";
 import type { Slide } from "@/lib/types";
-import { KIND_LABEL, getLayout, layoutsOf, type Fields, type LayoutKind } from "@/lib/magazine";
+import { KIND_LABEL, getLayout, layoutFonts, layoutsOf, type Fields, type LayoutKind } from "@/lib/magazine";
 import { DATA_EVENT } from "@/lib/cloud-sync";
 import { DEFAULT_COMBO, favFirst, loadFavorites, samplePage, saveFavorites, type Combo, type PageSpec } from "@/lib/page-templates";
 
 const ACCENTS = ["#e5481c", "#2b6fff", "#0b4a8f", "#2fb79a", "#f2b705", "#d6336c", "#141414"];
 /** 템플릿 미리보기에 쓰는 글꼴 */
-const MAG_FONTS = [500, 700, 800].map((w) => ({ id: "Pretendard", w })).concat([{ id: "NanumMyeongjo", w: 400 }]);
+const MAG_FONTS = layoutFonts();
 /** 템플릿 조합에서 고르는 장 (마지막 장은 없앰) */
 type Step = "cover" | "inner";
 const KINDS: Step[] = ["cover", "inner"];

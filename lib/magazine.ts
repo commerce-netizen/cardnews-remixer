@@ -205,6 +205,48 @@ const done = (c: ReturnType<typeof canvas>, bg: string, ink: Built["ink"], photo
 
 const H1 = { weight: 800, lineHeight: 1.25, letterSpacing: -3 } as const;
 
+// ── 인기 카드뉴스 양식 공통 모양 ───────────────────────
+/** 사진 위 큰 흰 제목 (테두리 없이 그림자) */
+const HOT_TITLE: Partial<BlockStyle> = { weight: 800, size: 84, color: "#ffffff", lineHeight: 1.22, letterSpacing: -3, shadow: true };
+/** 제목 위 작은 말풍선 머리글 (검은 둥근 띠) */
+const CHIP_PILL: Partial<BlockStyle> = {
+  weight: 600, size: 28, color: "#ffffff", align: "center", vAlign: "middle", lineHeight: 1.2,
+  box: true, boxColor: "#000000", boxOpacity: 72, boxRadius: 32, boxPad: 0,
+};
+/** 오른쪽 아래 댓글 유도 말풍선 */
+const CTA_BUBBLE: Partial<BlockStyle> = {
+  weight: 600, size: 24, color: "#ffffff", align: "center", vAlign: "middle", lineHeight: 1.35,
+  box: true, boxColor: "#1f1f1f", boxOpacity: 85, boxRadius: 14, boxPad: 0,
+};
+const CTA_AT = [790, 1185, 230, 92] as const;
+const CTA_DESC =
+  "오른쪽 아래 작은 댓글 유도 말풍선. 이 장 글이나 원본에 '댓글에 ○○ 남겨' 같은 댓글 유도가 있을 때만 2줄(\\n)로 (예: \"@댓글에 '나도'\\n남겨주세요\"), 없으면 빈 문자열";
+
+/** 사진 위 얇은 흰 테두리 글상자 (y = 상자 위쪽 px) + 오른쪽 아래 댓글 말풍선 */
+function frameInner(id: string, name: string, desc: string, y: number): LayoutDef {
+  return {
+    id,
+    kind: "inner",
+    name,
+    desc,
+    photo: true,
+    fields: [
+      { key: "body", desc: "본문. 정확히 2줄(\\n), 한 줄 12~20자", max: 44 },
+      { key: "cta", desc: CTA_DESC, max: 24 },
+    ],
+    sample: { body: "이건 테두리 글상자에\n들어가는 내지 글이에요", cta: "@댓글에 '나도'\n남겨주세요" },
+    build(f, ctx) {
+      const c = canvas(ctx);
+      c.text("body", "body", S(f.body), 170, y, 740, 190, {
+        weight: 400, size: 40, color: "#ffffff", align: "center", vAlign: "middle", lineHeight: 1.4, shadow: true,
+        box: true, boxColor: "#000000", boxOpacity: 18, boxRadius: 0, boxPad: 24, boxBorder: true, boxBorderColor: "#ffffff",
+      });
+      c.text("cta", "other", S(f.cta), ...CTA_AT, CTA_BUBBLE);
+      return done(c, "#1d1d1d", "light");
+    },
+  };
+}
+
 // ── 표지 ──────────────────────────────────────────────
 const COVERS: LayoutDef[] = [
   {
@@ -327,6 +369,131 @@ const COVERS: LayoutDef[] = [
       });
       c.box(110, 1030, 500, 26, { fill: ctx.accent });
       return done(c, PAPER, "dark", null);
+    },
+  },
+  // ── 인기 카드뉴스에서 뽑은 표지 (글 위치·구성 기준) ──
+  {
+    id: "cover-chip-bottom",
+    kind: "cover",
+    name: "말풍선 + 아래 두 줄",
+    desc: "작은 말풍선 머리글 아래 가운데 큰 제목 두 줄, 둘째 줄 강조",
+    photo: true,
+    fields: [
+      { key: "kicker", desc: "제목 위 작은 말풍선 한 줄 (속마음·반응, 예: '이게 그렇게 좋다고?')", max: 18 },
+      { key: "title", desc: "큰 제목. 정확히 2줄(\\n), 한 줄 7~13자. 둘째 줄이 결과·숫자 같은 핵심", max: 28 },
+    ],
+    sample: { kicker: "말풍선 머리글이에요", title: "이건 첫째 줄 제목\n둘째 줄은 강조돼요" },
+    build(f, ctx) {
+      const c = canvas(ctx);
+      c.box(0, 0, 1080, 1350, { fill: SHADE_BOTTOM, tag: "shade" });
+      c.text("kicker", "label", S(f.kicker), 270, 930, 540, 64, CHIP_PILL);
+      c.text("title", "title", S(f.title), 50, 1015, 980, 250, { ...HOT_TITLE, fontId: "jua", weight: 400, size: 88, letterSpacing: -2, align: "center", accentColor: ctx.accent, accentLines: [2] });
+      return done(c, "#1d1d1d", "light");
+    },
+  },
+  {
+    id: "cover-chip-top",
+    kind: "cover",
+    name: "말풍선 + 위 두 줄",
+    desc: "위쪽에 작은 말풍선 머리글과 가운데 큰 제목 두 줄",
+    photo: true,
+    fields: [
+      { key: "kicker", desc: "제목 위 작은 말풍선 한 줄 (예: '지금 폭풍 할인중이야')", max: 18 },
+      { key: "title", desc: "큰 제목. 정확히 2줄(\\n), 한 줄 7~13자", max: 28 },
+    ],
+    sample: { kicker: "말풍선 머리글이에요", title: "이건 위에 들어가는\n썸네일 제목이에요" },
+    build(f, ctx) {
+      const c = canvas(ctx);
+      c.box(0, 0, 1080, 1350, { fill: SHADE_TOP });
+      c.text("kicker", "label", S(f.kicker), 270, 130, 540, 64, CHIP_PILL);
+      c.text("title", "title", S(f.title), 50, 215, 980, 250, { ...HOT_TITLE, fontId: "BMDOHYEON", weight: 400, size: 86, letterSpacing: -2, outline: true, outlineWidth: 3, align: "center", accentColor: ctx.accent, accentLines: [2] });
+      return done(c, "#1d1d1d", "light");
+    },
+  },
+  {
+    id: "cover-center-big",
+    kind: "cover",
+    name: "한가운데 세 줄",
+    desc: "사진 한가운데 가운데 정렬 큰 제목 세 줄 (공지·날짜형)",
+    photo: true,
+    fields: [{ key: "title", desc: "제목. 정확히 3줄(\\n), 한 줄 6~14자. 날짜·가격 같은 핵심을 마지막 줄에", max: 42 }],
+    sample: { title: "이건 한가운데\n세 줄로 들어가는\n썸네일 제목이에요" },
+    build(f, ctx) {
+      const c = canvas(ctx);
+      c.box(0, 0, 1080, 1350, { fill: "rgba(0,0,0,0.28)" });
+      c.text("title", "title", S(f.title), 50, 440, 980, 470, { ...HOT_TITLE, fontId: "Jalnan", weight: 400, size: 76, letterSpacing: -2, lineHeight: 1.3, align: "center", vAlign: "middle" });
+      return done(c, "#1d1d1d", "light");
+    },
+  },
+  {
+    id: "cover-kicker-left",
+    kind: "cover",
+    name: "머리글 + 왼쪽 두 줄",
+    desc: "왼쪽 아래 작은 머리글 한 줄과 담백한 제목 두 줄 (레시피·시리즈형)",
+    photo: true,
+    fields: [
+      { key: "kicker", desc: "작은 머리글 한 줄 (시리즈·출처, 예: '60년 종가집 며느리 레시피')", max: 20 },
+      { key: "title", desc: "제목. 1~2줄(\\n), 한 줄 8~16자", max: 32 },
+    ],
+    sample: { kicker: "작은 머리글이에요", title: "이건 왼쪽 아래\n썸네일 제목이에요" },
+    build(f, ctx) {
+      const c = canvas(ctx);
+      c.box(0, 0, 1080, 1350, { fill: SHADE_BOTTOM, tag: "shade" });
+      c.text("kicker", "label", S(f.kicker), 60, 1000, 960, 60, { weight: 400, size: 40, color: "#ffffff", lineHeight: 1.2, letterSpacing: 2, shadow: true });
+      c.text("title", "title", S(f.title), 60, 1070, 960, 220, { weight: 500, size: 76, color: "#ffffff", lineHeight: 1.3, letterSpacing: 3, shadow: true });
+      return done(c, "#1d1d1d", "light");
+    },
+  },
+  {
+    id: "cover-three-accent",
+    kind: "cover",
+    name: "머리글 + 세 줄, 끝줄 강조",
+    desc: "작은 머리글 아래 가운데 큰 제목 세 줄, 마지막 줄 강조",
+    photo: true,
+    fields: [
+      { key: "kicker", desc: "작은 머리글 한 줄 (예: '이거 하나면 그냥 끝나요')", max: 20 },
+      { key: "title", desc: "큰 제목. 정확히 3줄(\\n), 한 줄 6~13자. 마지막 줄이 핵심(결과·대상)", max: 40 },
+    ],
+    sample: { kicker: "작은 머리글이에요", title: "이건 첫째 줄\n둘째 줄 제목\n마지막 줄은 강조" },
+    build(f, ctx) {
+      const c = canvas(ctx);
+      c.box(0, 0, 1080, 1350, { fill: SHADE_BOTTOM, tag: "shade" });
+      c.text("kicker", "label", S(f.kicker), 60, 880, 960, 52, { weight: 600, size: 32, color: "#ffffff", align: "center", lineHeight: 1.2, shadow: true });
+      c.text("title", "title", S(f.title), 50, 945, 980, 330, { ...HOT_TITLE, fontId: "Aggro", weight: 700, size: 74, letterSpacing: -3, align: "center", accentColor: ctx.accent, accentLines: [3] });
+      return done(c, "#1d1d1d", "light");
+    },
+  },
+  {
+    id: "cover-price",
+    kind: "cover",
+    name: "위 제목 + 가격표",
+    desc: "위쪽 말풍선·제목 두 줄, 오른쪽 아래 할인 가격표 (특가·할인형)",
+    photo: true,
+    fields: [
+      { key: "kicker", desc: "제목 위 작은 말풍선 한 줄 (예: '이 가격 실화나 진짜..?')", max: 18 },
+      { key: "title", desc: "큰 제목. 정확히 2줄(\\n), 한 줄 7~13자", max: 28 },
+      { key: "tag", desc: "가격표 맨 위 이름 (예: '블프 특가'). 모르면 빈 문자열", max: 8 },
+      { key: "was", desc: "원래 가격 (예: '정가 60,000원'). 글에 없으면 빈 문자열", max: 14 },
+      { key: "off", desc: "할인율 (예: '60%'). 글에 없으면 빈 문자열", max: 5 },
+      { key: "price", desc: "할인 가격 (예: '23,600원'). 글에 없으면 빈 문자열", max: 10 },
+    ],
+    sample: { kicker: "말풍선 머리글이에요", title: "이건 특가 소식\n썸네일 제목이에요", tag: "특가", was: "정가 00,000원", off: "00%", price: "00,000원" },
+    build(f, ctx) {
+      const c = canvas(ctx);
+      c.box(0, 0, 1080, 1350, { fill: SHADE_TOP });
+      c.text("kicker", "label", S(f.kicker), 270, 130, 540, 64, CHIP_PILL);
+      c.text("title", "title", S(f.title), 50, 215, 980, 250, { ...HOT_TITLE, fontId: "GmarketSans", weight: 700, size: 82, letterSpacing: -4, outline: true, outlineWidth: 3, align: "center", accentColor: ctx.accent, accentLines: [2] });
+      if (S(f.price)) {
+        c.box(690, 860, 330, 380, { fill: "#ffffff", radius: 18 });
+        c.text("tag", "label", S(f.tag), 710, 885, 290, 60, { weight: 800, size: 36, align: "center", vAlign: "middle", lineHeight: 1.1 });
+        c.text("was", "other", S(f.was), 710, 960, 290, 50, { size: 26, color: MUTED, align: "center", vAlign: "middle", lineHeight: 1.1 });
+        c.text("off", "number", S(f.off), 780, 1025, 150, 64, {
+          weight: 800, size: 34, color: "#ffffff", align: "center", vAlign: "middle", lineHeight: 1,
+          box: true, boxColor: ctx.accent, boxOpacity: 100, boxRadius: 10, boxPad: 0,
+        });
+        c.text("price", "number", S(f.price), 710, 1110, 290, 90, { fontId: "GmarketSans", weight: 700, size: 52, color: ctx.accent, align: "center", vAlign: "middle", lineHeight: 1, letterSpacing: -3 });
+      }
+      return done(c, "#1d1d1d", "light");
     },
   },
 ];
@@ -812,6 +979,68 @@ const INNERS: LayoutDef[] = [
       return done(c, PAPER, "dark", c.rect(290, 310, 500, 500));
     },
   },
+  // ── 인기 카드뉴스에서 뽑은 속지 (글 위치·구성 기준) ──
+  frameInner("inner-frame-bottom", "테두리 글상자 (아래)", "사진 위 아래쪽에 얇은 흰 테두리 글상자 + 댓글 말풍선", 960),
+  frameInner("inner-frame-center", "테두리 글상자 (가운데)", "사진 위 한가운데 얇은 흰 테두리 글상자 + 댓글 말풍선", 580),
+  frameInner("inner-frame-top", "테두리 글상자 (위)", "사진 위 위쪽에 얇은 흰 테두리 글상자 + 댓글 말풍선", 140),
+  {
+    id: "inner-plain-center",
+    kind: "inner",
+    name: "상자 없는 글 (가운데 아래)",
+    desc: "사진 위 가운데 아래쪽에 상자 없이 흰 글 두세 줄",
+    photo: true,
+    fields: [
+      { key: "body", desc: "본문. 2~3줄(\\n), 한 줄 13~20자", max: 60 },
+      { key: "cta", desc: CTA_DESC, max: 24 },
+    ],
+    sample: { body: "이건 상자 없이 들어가는\n내지 글이에요", cta: "" },
+    build(f, ctx) {
+      const c = canvas(ctx);
+      c.box(0, 0, 1080, 1350, { fill: SHADE_BOTTOM, tag: "shade" });
+      c.text("body", "body", S(f.body), 70, 860, 940, 240, { fontId: "GmarketSans", weight: 500, size: 44, color: "#ffffff", align: "center", vAlign: "middle", lineHeight: 1.5, letterSpacing: -3, shadow: true });
+      c.text("cta", "other", S(f.cta), ...CTA_AT, CTA_BUBBLE);
+      return done(c, "#1d1d1d", "light");
+    },
+  },
+  {
+    id: "inner-hand-top",
+    kind: "inner",
+    name: "손글씨 메모 (왼쪽 위)",
+    desc: "사진 왼쪽 위에 손글씨로 말하듯 여러 줄 + 아래 댓글 안내",
+    photo: true,
+    fields: [
+      { key: "body", desc: "말하듯 편한 글. 3~4줄(\\n), 한 줄 12~20자", max: 80 },
+      { key: "cta", desc: "아래 둥근 댓글 안내 한 줄 (예: \"댓글에 '나도' 남겨줘\"). 댓글 유도가 없으면 빈 문자열", max: 20 },
+    ],
+    sample: { body: "이건 손글씨로\n왼쪽 위에 들어가는\n내지 글이에요", cta: "" },
+    build(f, ctx) {
+      const c = canvas(ctx);
+      c.box(0, 0, 1080, 1350, { fill: SHADE_TOP });
+      c.text("body", "body", S(f.body), 70, 110, 880, 460, { fontId: "NanumPen", weight: 400, size: 66, color: "#ffffff", lineHeight: 1.3, letterSpacing: 0, shadow: true });
+      c.text("cta", "other", S(f.cta), 260, 1150, 560, 76, {
+        weight: 700, size: 30, color: "#141414", align: "center", vAlign: "middle", lineHeight: 1.2,
+        box: true, boxColor: "#ffffff", boxOpacity: 88, boxRadius: 38, boxPad: 0,
+      });
+      return done(c, "#1d1d1d", "light");
+    },
+  },
+  {
+    id: "inner-memo-top",
+    kind: "inner",
+    name: "흰 메모 카드 (위)",
+    desc: "사진 위쪽 가운데 작은 흰 카드에 검은 글 두세 줄",
+    photo: true,
+    fields: [{ key: "body", desc: "본문. 2~3줄(\\n), 한 줄 16~26자. 마지막 줄에 댓글 유도가 있으면 넣어도 됨", max: 80 }],
+    sample: { body: "이건 흰 메모 카드에 들어가는\n내지 글이에요" },
+    build(f, ctx) {
+      const c = canvas(ctx);
+      c.text("body", "body", S(f.body), 170, 140, 740, 200, {
+        weight: 600, size: 32, color: "#141414", align: "center", vAlign: "middle", lineHeight: 1.5,
+        box: true, boxColor: "#ffffff", boxOpacity: 96, boxRadius: 6, boxPad: 22,
+      });
+      return done(c, "#1d1d1d", "light");
+    },
+  },
 ];
 
 // ── 마지막 장 ─────────────────────────────────────────
@@ -921,10 +1150,31 @@ const LASTS: LayoutDef[] = [
   },
 ];
 
-export const LAYOUTS: LayoutDef[] = [...COVERS, ...INNERS, ...LASTS];
+/** 고를 때 보이는 순서: 기본 썸네일·기본 텍스트 박스 → 인기 카드뉴스 양식 → 나머지 */
+const PINNED_FIRST = ["cover-classic", "inner-textbox"];
+const HOT_LAYOUTS = [
+  "cover-chip-bottom", "cover-chip-top", "cover-kicker-left", "cover-three-accent", "cover-center-big", "cover-price",
+  "inner-frame-bottom", "inner-frame-center", "inner-frame-top", "inner-plain-center", "inner-hand-top", "inner-memo-top",
+];
+const rank = (id: string) => (PINNED_FIRST.includes(id) ? 0 : HOT_LAYOUTS.includes(id) ? 1 : 2);
+export const LAYOUTS: LayoutDef[] = [...COVERS, ...INNERS, ...LASTS]
+  .map((l, i) => ({ l, i }))
+  .sort((a, b) => rank(a.l.id) - rank(b.l.id) || a.i - b.i)
+  .map((x) => x.l);
 const BY_ID = new Map(LAYOUTS.map((l) => [l.id, l]));
 export const getLayout = (id?: string | null) => (id ? BY_ID.get(id) : undefined);
 export const layoutsOf = (kind: LayoutKind) => LAYOUTS.filter((l) => l.kind === kind);
+
+/** 양식들이 기본으로 쓰는 글꼴 (미리보기 전에 내려받아 두기) */
+export function layoutFonts(): { id: string; w: number }[] {
+  const seen = new Map<string, { id: string; w: number }>();
+  for (const l of LAYOUTS) {
+    for (const b of l.build(l.sample, { H: 1350, accent: DEFAULT_ACCENT, handle: "@a" }).blocks) {
+      seen.set(`${b.fontId}:${b.weight}`, { id: b.fontId, w: b.weight });
+    }
+  }
+  return [...seen.values()];
+}
 
 /** 칸 값 정리: 목록은 정해진 개수로, 글은 문자열로 */
 export function normalizeFields(def: LayoutDef, raw: Fields): Fields {
@@ -936,6 +1186,9 @@ export function normalizeFields(def: LayoutDef, raw: Fields): Fields {
   return out;
 }
 
+/** AI 없이 나눌 때 비워 두는 칸 (댓글 말풍선·가격표 — 본문 줄을 엉뚱하게 가져가지 않게) */
+const OPTIONAL_KEYS = new Set(["cta", "tag", "was", "off", "price"]);
+
 /** AI 없이 글을 칸에 나눠 넣기 (AI가 실패했을 때) */
 export function roughFields(def: LayoutDef, text: string): Fields {
   const lines = text.split("\n").map((s) => s.trim()).filter(Boolean);
@@ -944,7 +1197,7 @@ export function roughFields(def: LayoutDef, text: string): Fields {
   for (const f of def.fields) {
     if (f.count) {
       out[f.key] = Array.from({ length: f.count }, () => lines[i++] ?? "");
-    } else if (f.key === "hl" || f.key === "num") {
+    } else if (f.key === "hl" || f.key === "num" || OPTIONAL_KEYS.has(f.key)) {
       out[f.key] = f.key === "num" ? "1" : "";
     } else {
       out[f.key] = lines[i++] ?? "";

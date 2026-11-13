@@ -59,7 +59,8 @@ function withAccent(text: string, lines: number[] | undefined, color: string): R
   if (!color || !lines?.length) return text;
   const on = new Set(lines);
   return text.split("\n").flatMap((line, i) => {
-    const part = on.has(i + 1) ? <span key={i} style={{ color }}>{line}</span> : line;
+    // font·자간은 글 상자 값을 그대로 — 바깥 CSS(.layout-pick span 등)가 글자 크기를 바꾸지 못하게
+    const part = on.has(i + 1) ? <span key={i} style={{ color, font: "inherit", letterSpacing: "inherit" }}>{line}</span> : line;
     return i === 0 ? [part] : ["\n", part];
   });
 }
