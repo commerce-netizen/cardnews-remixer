@@ -32,7 +32,7 @@ import { DEFAULT_COMBO, favFirst, loadFavorites, samplePage, saveFavorites, type
 
 const ACCENTS = ["#e5481c", "#2b6fff", "#0b4a8f", "#2fb79a", "#f2b705", "#d6336c", "#141414"];
 /** 템플릿 미리보기에 쓰는 글꼴 */
-const MAG_FONTS = [500, 700, 800].map((w) => ({ id: "Pretendard", w })).concat([{ id: "NanumMyeongjo", w: 400 }]);
+const MAG_FONTS = [500, 600, 700, 800].map((w) => ({ id: "Pretendard", w })).concat([{ id: "NanumMyeongjo", w: 400 }, { id: "NanumPen", w: 400 }]);
 /** 템플릿 조합에서 고르는 장 (마지막 장은 없앰) */
 type Step = "cover" | "inner";
 const KINDS: Step[] = ["cover", "inner"];

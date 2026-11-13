@@ -117,6 +117,31 @@ export const BUILTIN_TEMPLATES: Template[] = [
   builtinCombo("set-photo", "포토 스토리", {
     cover: { layout: "cover-photo-center" }, inner: { layout: "dark-card" }, accent: "#2b6fff",
   }),
+  // ── 인기 카드뉴스 레이아웃 (글 위치·구성으로 나눔, 색은 아무거나 바꿔 써도 됨) ──
+  builtinCombo("hot-chip-bottom", "인기 · 말풍선 + 아래 제목", {
+    cover: { layout: "cover-chip-bottom" }, inner: { layout: "inner-frame-bottom" }, accent: "#ffe14d",
+  }),
+  builtinCombo("hot-chip-top", "인기 · 말풍선 + 위 제목", {
+    cover: { layout: "cover-chip-top" }, inner: { layout: "inner-frame-top" }, accent: "#ffe14d",
+  }),
+  builtinCombo("hot-left-recipe", "인기 · 왼쪽 아래 레시피", {
+    cover: { layout: "cover-kicker-left" }, inner: { layout: "inner-frame-bottom" }, accent: "#ffe14d",
+  }),
+  builtinCombo("hot-left-bold", "인기 · 왼쪽 아래 굵은 세 줄", {
+    cover: { layout: "cover-classic", shade: true }, inner: { layout: "inner-memo-top" }, accent: "#ffe14d",
+  }),
+  builtinCombo("hot-three-accent", "인기 · 세 줄 끝줄 강조", {
+    cover: { layout: "cover-three-accent" }, inner: { layout: "inner-plain-center" }, accent: "#a8f25c",
+  }),
+  builtinCombo("hot-center", "인기 · 한가운데 공지", {
+    cover: { layout: "cover-center-big" }, inner: { layout: "inner-frame-center" }, accent: "#ffe14d",
+  }),
+  builtinCombo("hot-price", "인기 · 특가 가격표", {
+    cover: { layout: "cover-price" }, inner: { layout: "inner-frame-bottom" }, accent: "#e5302a",
+  }),
+  builtinCombo("hot-handwrite", "인기 · 손글씨 후기", {
+    cover: { layout: "cover-chip-top" }, inner: { layout: "inner-hand-top" }, accent: "#ffe14d",
+  }),
 ];
 
 export const DEFAULT_TEMPLATE = BUILTIN_TEMPLATES[0];
