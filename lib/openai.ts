@@ -23,17 +23,34 @@ export function withApiKey<T>(key: string, fn: () => Promise<T>): Promise<T> {
 }
 
 export function openai(opts: { maxRetries?: number; timeout?: number } = {}) {
-  // 기본: 일시적 오류만 1번 재시도 (사용량 한도 보호)
+  // 기본: 일시적 오류·분당 한도(429)는 2번까지 재시도 — SDK가 OpenAI가 알려 준 대기 시간(retry-after)만큼 쉬었다 다시 보낸다
   const apiKey = keyStore.getStore();
-  return new OpenAI({ maxRetries: 1, timeout: 110_000, ...(apiKey ? { apiKey } : {}), ...opts });
+  return new OpenAI({ maxRetries: 2, timeout: 110_000, ...(apiKey ? { apiKey } : {}), ...opts });
+}
+
+/**
+ * 429는 두 종류라 해결법이 다르다.
+ *   insufficient_quota — 충전 잔액이 바닥났거나 월 사용 한도(Limits)에 닿음 → 기다려도 안 풀림, 충전·한도 올리기
+ *   rate_limit_exceeded — 1분 동안 너무 많이 보냄(계정 등급이 낮을수록 빡빡) → 잠깐 쉬면 풀림
+ */
+export function isQuotaError(e: unknown): boolean {
+  return e instanceof OpenAI.RateLimitError && (e.code === "insufficient_quota" || /quota|billing/i.test(e.message));
+}
+
+/** 브라우저에 돌려줄 HTTP 상태 — 402=잔액·월 한도(재시도 무의미), 429=분당 한도(잠시 뒤 재시도) */
+export function errorStatus(e: unknown, fallback = 502): number {
+  if (e instanceof OpenAI.RateLimitError) return isQuotaError(e) ? 402 : 429;
+  return fallback;
 }
 
 /** OpenAI SDK 오류를 사용자용 한글 메시지로 */
 export function friendlyError(e: unknown): string {
   if (e instanceof UserFacingError) return e.message;
+  if (isQuotaError(e)) {
+    return "OpenAI 충전 잔액이 바닥났거나 이번 달 사용 한도에 닿았어요. platform.openai.com → Billing에서 충전하거나, Limits에서 월 한도를 올린 뒤 다시 눌러 주세요.";
+  }
   if (e instanceof OpenAI.RateLimitError) {
-    // 429는 일시적 사용량 초과이거나, 월 사용 한도(예산) 소진
-    return "AI 사용량 한도에 걸렸어요. 1분 뒤 다시 눌러 보고, 계속 안 되면 OpenAI 계정의 이번 달 사용 한도나 충전 잔액을 확인해 주세요.";
+    return "AI에 요청이 한꺼번에 몰려서 잠깐 막혔어요(1분당 한도). 1분 뒤 다시 눌러 주세요.";
   }
   if (e instanceof OpenAI.AuthenticationError) return "AI 키가 올바르지 않아요. 마이페이지에서 OpenAI API 키를 다시 넣어 주세요.";
   if (e instanceof OpenAI.NotFoundError) return "AI 모델을 찾을 수 없어요. 관리자에게 모델 설정을 확인해 달라고 알려 주세요.";

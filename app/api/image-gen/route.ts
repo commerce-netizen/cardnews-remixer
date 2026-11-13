@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { isImageGenEnabled, remakeSlideImage, type ImageGenRequest } from "@/lib/image-gen";
-import { friendlyError, withApiKey } from "@/lib/openai";
+import { errorStatus, friendlyError, withApiKey } from "@/lib/openai";
 import { requestApiKey, statusOf } from "@/lib/user-key";
 
 export const runtime = "nodejs";
@@ -22,6 +22,6 @@ export async function POST(req: Request) {
     return NextResponse.json({ image: await withApiKey(key, () => remakeSlideImage(body ?? {})) });
   } catch (e) {
     console.error("[image-gen]", e);
-    return NextResponse.json({ error: friendlyError(e) }, { status: 502 });
+    return NextResponse.json({ error: friendlyError(e) }, { status: errorStatus(e) });
   }
 }
