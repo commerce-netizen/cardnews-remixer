@@ -1150,7 +1150,17 @@ const LASTS: LayoutDef[] = [
   },
 ];
 
-export const LAYOUTS: LayoutDef[] = [...COVERS, ...INNERS, ...LASTS];
+/** 고를 때 보이는 순서: 기본 썸네일·기본 텍스트 박스 → 인기 카드뉴스 양식 → 나머지 */
+const PINNED_FIRST = ["cover-classic", "inner-textbox"];
+const HOT_LAYOUTS = [
+  "cover-chip-bottom", "cover-chip-top", "cover-kicker-left", "cover-three-accent", "cover-center-big", "cover-price",
+  "inner-frame-bottom", "inner-frame-center", "inner-frame-top", "inner-plain-center", "inner-hand-top", "inner-memo-top",
+];
+const rank = (id: string) => (PINNED_FIRST.includes(id) ? 0 : HOT_LAYOUTS.includes(id) ? 1 : 2);
+export const LAYOUTS: LayoutDef[] = [...COVERS, ...INNERS, ...LASTS]
+  .map((l, i) => ({ l, i }))
+  .sort((a, b) => rank(a.l.id) - rank(b.l.id) || a.i - b.i)
+  .map((x) => x.l);
 const BY_ID = new Map(LAYOUTS.map((l) => [l.id, l]));
 export const getLayout = (id?: string | null) => (id ? BY_ID.get(id) : undefined);
 export const layoutsOf = (kind: LayoutKind) => LAYOUTS.filter((l) => l.kind === kind);

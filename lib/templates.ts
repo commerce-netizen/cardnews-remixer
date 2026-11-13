@@ -105,18 +105,6 @@ export const BUILTIN_TEMPLATES: Template[] = [
   builtinCombo("set-classic", "기본 텍스트 박스", {
     cover: { layout: "cover-classic", shade: true }, inner: { layout: "inner-textbox" }, accent: "#e5481c",
   }),
-  builtinCombo("set-black", "블랙 무드", {
-    cover: { layout: "cover-photo-bottom" }, inner: { layout: "photo-sub-body" }, accent: "#e5481c",
-  }),
-  builtinCombo("set-info", "정보 정리", {
-    cover: { layout: "cover-book" }, inner: { layout: "info-table" }, accent: "#0b4a8f",
-  }),
-  builtinCombo("set-rank", "랭킹 리스트", {
-    cover: { layout: "cover-color-top" }, inner: { layout: "ranking" }, accent: "#2fb79a",
-  }),
-  builtinCombo("set-photo", "포토 스토리", {
-    cover: { layout: "cover-photo-center" }, inner: { layout: "dark-card" }, accent: "#2b6fff",
-  }),
   // ── 인기 카드뉴스 레이아웃 (글 위치·구성으로 나눔, 색은 아무거나 바꿔 써도 됨) ──
   builtinCombo("hot-chip-bottom", "인기 · 말풍선 + 아래 제목", {
     cover: { layout: "cover-chip-bottom" }, inner: { layout: "inner-frame-bottom" }, accent: "#ffe14d",
@@ -141,6 +129,19 @@ export const BUILTIN_TEMPLATES: Template[] = [
   }),
   builtinCombo("hot-handwrite", "인기 · 손글씨 후기", {
     cover: { layout: "cover-chip-top" }, inner: { layout: "inner-hand-top" }, accent: "#ffe14d",
+  }),
+  // ── 예전 기본 제공 템플릿 ──
+  builtinCombo("set-black", "블랙 무드", {
+    cover: { layout: "cover-photo-bottom" }, inner: { layout: "photo-sub-body" }, accent: "#e5481c",
+  }),
+  builtinCombo("set-info", "정보 정리", {
+    cover: { layout: "cover-book" }, inner: { layout: "info-table" }, accent: "#0b4a8f",
+  }),
+  builtinCombo("set-rank", "랭킹 리스트", {
+    cover: { layout: "cover-color-top" }, inner: { layout: "ranking" }, accent: "#2fb79a",
+  }),
+  builtinCombo("set-photo", "포토 스토리", {
+    cover: { layout: "cover-photo-center" }, inner: { layout: "dark-card" }, accent: "#2b6fff",
   }),
 ];
 
